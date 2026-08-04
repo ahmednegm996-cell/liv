@@ -30,6 +30,11 @@ jobs:
       - name: Scaffold native Android project
         run: flutter create --platforms=android --org com.liv --project-name liv_app .
 
+      - name: Set Android compile SDK to 35
+        run: |
+          sed -i -E 's/compileSdk = [0-9]+/compileSdk = 35/' android/app/build.gradle
+          grep -n "compileSdk" android/app/build.gradle || true
+
       - name: Enable Internet for release APK
         run: |
           python3 - <<'PY'
