@@ -80,6 +80,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Generate app icon (launcher icon)
+        run: flutter pub run flutter_launcher_icons
+
       - name: Build APK (Release)
         run: flutter build apk --release
 
