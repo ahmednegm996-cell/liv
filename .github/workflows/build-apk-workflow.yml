@@ -30,11 +30,39 @@ jobs:
       - name: Scaffold native Android project
         run: flutter create --platforms=android --org com.liv --project-name liv_app .
 
-      - name: Bump Kotlin Gradle plugin version
+      - name: Bump Kotlin & AGP versions
         run: |
           sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' android/settings.gradle
+          sed -i -E 's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' android/settings.gradle
           echo "----- settings.gradle after patch -----"
           cat android/settings.gradle
+
+      - name: Unzip project if needed
+        run: |
+          if [ -f liv_app.zip ]; then
+            echo "Found liv_app.zip — extracting..."
+            unzip -o liv_app.zip
+            if [ -d liv_app ]; then
+              cp -r liv_app/* .
+              cp -r liv_app/.[!.]* . 2>/dev/null || true
+              rm -rf liv_app
+            fi
+          fi
+          ls -la
+          test -f pubspec.yaml && echo "pubspec.yaml found OK" || echo "WARNING: pubspec.yaml not found"
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK (Release)
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: liv-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14          cat android/settings.gradle
 
       - name: Unzip project if needed
         run: |
