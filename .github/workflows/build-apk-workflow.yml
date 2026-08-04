@@ -27,11 +27,14 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # الخطوة الجديدة: بننشئ مشروع Flutter/Android سليم 100% بالأدوات الرسمية
-      # (ده بيولّد android/ بكل ملفات الـ Gradle الصحيحة والمتوافقة مع نسخة Flutter دي)
-      # قبل ما نحط كود التطبيق بتاعنا فوقه.
       - name: Scaffold native Android project
         run: flutter create --platforms=android --org com.liv --project-name liv_app .
+
+      - name: Bump Kotlin Gradle plugin version
+        run: |
+          sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' android/settings.gradle
+          echo "----- settings.gradle after patch -----"
+          cat android/settings.gradle
 
       - name: Unzip project if needed
         run: |
