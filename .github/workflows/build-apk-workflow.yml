@@ -30,15 +30,19 @@ jobs:
       - name: Scaffold native Android project
         run: flutter create --platforms=android --org com.liv --project-name liv_app .
 
-      - name: Bump Kotlin, AGP & Gradle versions
+      # بنرفع Kotlin و AGP و Gradle و NDK مع بعض عشان يكونوا متوافقين
+      - name: Bump Kotlin, AGP, Gradle & NDK versions
         run: |
           sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' android/settings.gradle
           sed -i -E 's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' android/settings.gradle
           sed -i -E 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' android/gradle/wrapper/gradle-wrapper.properties
-          echo "----- settings.gradle after patch -----"
+          sed -i -E 's/(ndkVersion = flutter.ndkVersion)/ndkVersion = "26.1.10909125"/' android/app/build.gradle
+          echo "----- settings.gradle -----"
           cat android/settings.gradle
-          echo "----- gradle-wrapper.properties after patch -----"
+          echo "----- gradle-wrapper.properties -----"
           cat android/gradle/wrapper/gradle-wrapper.properties
+          echo "----- app/build.gradle (head) -----"
+          head -n 15 android/app/build.gradle
 
       - name: Unzip project if needed
         run: |
