@@ -1,0 +1,39 @@
+name: liv_app
+description: "Liv - تطبيق إدارة الحياة الشخصية: عادات، أهداف، أحلام، ونقاط، بمساعدة الذكاء الاصطناعي."
+publish_to: 'none'
+version: 1.3.2+7
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  shared_preferences: ^2.2.2
+  http: ^1.2.1
+  uuid: ^4.4.0
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+  audioplayers: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/audio/welcome_ambient.wav
+    - assets/audio/ai_ambient.wav
+    - assets/icon/liv_icon.png
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/liv_icon.png"
+  adaptive_icon_background: "#12121A"
+  adaptive_icon_foreground: "assets/icon/liv_icon.png"
+  min_sdk_android: 21
