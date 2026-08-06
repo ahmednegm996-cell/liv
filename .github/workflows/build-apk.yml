@@ -79,15 +79,67 @@ jobs:
           grep -q "LivApp" lib/main.dart || (echo "FATAL: main.dart overwritten by demo" && exit 1)
           echo "Liv sources restored successfully"
 
-      - name: Set Android compile SDK to 35
+      - name: Patch missing Gaps + Gemini method (safety)
         run: |
-          if [ -f android/app/build.gradle ]; then
-            sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' android/app/build.gradle
-            sed -i -E 's/compileSdkVersion\s+[0-9]+/compileSdkVersion 35/' android/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          # Gaps
+          theme = Path("lib/theme/app_theme.dart")
+          if theme.exists():
+              t = theme.read_text()
+              if "static const h6" not in t:
+                  t = t.replace(
+                      "static const h4 = SizedBox(height: 4);",
+                      "static const h4 = SizedBox(height: 4);\n  static const h6 = SizedBox(height: 6);",
+                  )
+                  t = t.replace(
+                      "static const h12 = SizedBox(height: 12);",
+                      "static const h12 = SizedBox(height: 12);\n  static const h14 = SizedBox(height: 14);",
+                  )
+                  theme.write_text(t)
+                  print("Added Gaps.h6 and Gaps.h14")
+              else:
+                  print("Gaps already have h6/h14")
+          # personalityInsight
+          gs = Path("lib/services/gemini_service.dart")
+          if gs.exists():
+              g = gs.read_text()
+              if "personalityInsight" not in g:
+                  method = '''
+  Future<String> personalityInsight({required String profileSummary}) =>
+      generateText("""
+تحليل شخصية هادئ ومفيد بناءً على:
+$profileSummary
+اكتب 6-8 جمل: نقاط قوة، أنماط، فرصة واحدة للتحسين، ونصيحة عملية قصيرة. بالعربية.
+""");
+'''
+                  idx = g.rfind("}")
+                  g = g[:idx] + method + "\n" + g[idx:]
+                  gs.write_text(g)
+                  print("Added personalityInsight")
+              else:
+                  print("personalityInsight already present")
+          PY
+
+      - name: Set Android compile SDK to 35 (force)
+        run: |
+          # Force compileSdk = 35 in every possible place
+          find android -name "build.gradle" -o -name "build.gradle.kts" | while read f; do
+            echo "Patching $f"
+            sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" || true
+            sed -i -E 's/compileSdkVersion\s+[0-9]+/compileSdkVersion 35/' "$f" || true
+            sed -i -E 's/compileSdk\s+[0-9]+/compileSdk 35/' "$f" || true
+            # Also override flutter.compileSdkVersion style
+            if grep -q "compileSdk" "$f"; then
+              sed -i -E 's/compileSdk\s*=\s*flutter\.[a-zA-Z]+/compileSdk = 35/' "$f" || true
+            fi
+          done
+          # local.properties override if needed
+          if [ -f android/local.properties ]; then
+            echo "flutter.compileSdkVersion=35" >> android/local.properties || true
           fi
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' android/app/build.gradle.kts || true
-          fi
+          grep -n "compileSdk" android/app/build.gradle || true
+          grep -n "compileSdk" android/app/build.gradle.kts 2>/dev/null || true
 
       - name: Enable Internet for release APK
         run: |
@@ -112,12 +164,21 @@ jobs:
             sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' android/settings.gradle || true
             sed -i -E 's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' android/settings.gradle || true
           fi
+          if [ -f android/settings.gradle.kts ]; then
+            sed -i -E 's/(id\("org.jetbrains.kotlin.android"\) version ")[^"]+(")/\12.1.0\2/' android/settings.gradle.kts || true
+            sed -i -E 's/(id\("com.android.application"\) version ")[^"]+(")/\18.5.0\2/' android/settings.gradle.kts || true
+          fi
           if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
             sed -i -E 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' android/gradle/wrapper/gradle-wrapper.properties || true
           fi
           if [ -f android/app/build.gradle ]; then
             sed -i -E 's/(ndkVersion = flutter.ndkVersion)/ndkVersion = "26.1.10909125"/' android/app/build.gradle || true
             sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' android/app/build.gradle
+            sed -i -E 's/compileSdk\s*=\s*flutter\.[a-zA-Z]+/compileSdk = 35/' android/app/build.gradle
+          fi
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' android/app/build.gradle.kts || true
+            sed -i -E 's/compileSdk\s*=\s*flutter\.[a-zA-Z]+/compileSdk = 35/' android/app/build.gradle.kts || true
           fi
 
       - name: Verify Liv source before build
@@ -127,6 +188,8 @@ jobs:
           grep -q "liv_app" pubspec.yaml
           test -d lib/screens
           test -d lib/services
+          grep -q "h6" lib/theme/app_theme.dart || (echo "MISSING Gaps.h6" && exit 1)
+          grep -q "personalityInsight" lib/services/gemini_service.dart || (echo "MISSING personalityInsight" && exit 1)
           echo "Pre-build verification passed"
           head -15 lib/main.dart
 
