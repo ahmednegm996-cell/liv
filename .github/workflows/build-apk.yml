@@ -27,41 +27,73 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Unzip project if needed
+      - name: Prepare project files
         run: |
-          if [ -f liv_app.zip ]; then
-            echo "Found liv_app.zip — extracting..."
-            unzip -o liv_app.zip
-            if [ -d liv_app ]; then
-              cp -r liv_app/* .
-              cp -r liv_app/.[!.]* . 2>/dev/null || true
-              rm -rf liv_app
+          set -e
+          for Z in liv_app_full.zip liv_app.zip liv_app_github.zip; do
+            if [ -f "$Z" ]; then
+              echo "Found $Z — extracting..."
+              unzip -o "$Z" -d /tmp/liv_extract
+              if [ -d /tmp/liv_extract/liv_app ]; then
+                cp -a /tmp/liv_extract/liv_app/. .
+              else
+                cp -a /tmp/liv_extract/. .
+              fi
+              break
             fi
+          done
+          if [ -d liv_app ] && [ -f liv_app/pubspec.yaml ]; then
+            echo "Found nested liv_app/ — flattening..."
+            cp -a liv_app/. .
           fi
+          echo "=== Root listing ==="
           ls -la
-          test -f pubspec.yaml && echo "pubspec.yaml found OK" || echo "WARNING: pubspec.yaml not found"
+          echo "=== lib/ ==="
+          ls -la lib || true
+          test -f pubspec.yaml || (echo "ERROR: pubspec.yaml missing" && exit 1)
+          test -f lib/main.dart || (echo "ERROR: lib/main.dart missing" && exit 1)
+          grep -q "LivApp" lib/main.dart || (echo "ERROR: lib/main.dart is not Liv app" && exit 1)
+          echo "Project files OK — LivApp found in main.dart"
 
-      - name: Scaffold native Android project
+      - name: Backup Dart sources before flutter create
         run: |
-          if [ ! -d android ]; then
-            flutter create --platforms=android --org com.liv --project-name liv_app .
-          else
-            # ensure android exists but keep our lib/
-            flutter create --platforms=android --org com.liv --project-name liv_app . || true
+          rm -rf /tmp/liv_lib_backup /tmp/liv_pubspec_backup
+          cp -a lib /tmp/liv_lib_backup
+          cp pubspec.yaml /tmp/liv_pubspec_backup
+          mkdir -p /tmp/liv_assets_backup
+          cp -a assets /tmp/liv_assets_backup/ 2>/dev/null || true
+
+      - name: Scaffold native Android only
+        run: |
+          set -e
+          flutter create --platforms=android --org com.liv --project-name liv_app . || true
+          rm -rf lib
+          cp -a /tmp/liv_lib_backup lib
+          cp /tmp/liv_pubspec_backup pubspec.yaml
+          if [ -d /tmp/liv_assets_backup/assets ]; then
+            rm -rf assets
+            cp -a /tmp/liv_assets_backup/assets assets
           fi
+          echo "=== Restored main.dart head ==="
+          head -20 lib/main.dart
+          grep -q "LivApp" lib/main.dart || (echo "FATAL: main.dart overwritten by demo" && exit 1)
+          echo "Liv sources restored successfully"
 
       - name: Set Android compile SDK to 35
         run: |
           if [ -f android/app/build.gradle ]; then
             sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' android/app/build.gradle
             sed -i -E 's/compileSdkVersion\s+[0-9]+/compileSdkVersion 35/' android/app/build.gradle
-            grep -n "compileSdk" android/app/build.gradle || true
+          fi
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' android/app/build.gradle.kts || true
           fi
 
       - name: Enable Internet for release APK
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path("android/app/src/main/AndroidManifest.xml")
           if not p.exists():
               print("manifest missing")
@@ -69,11 +101,7 @@ jobs:
           text = p.read_text()
           permission = '<uses-permission android:name="android.permission.INTERNET"/>'
           if permission not in text:
-              text = text.replace(
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    ' + permission,
-                  1,
-              )
+              text = re.sub(r'(<manifest[^>]*>)', r'\1\n    ' + permission, text, count=1)
               p.write_text(text)
           print("INTERNET permission OK")
           PY
@@ -89,15 +117,27 @@ jobs:
           fi
           if [ -f android/app/build.gradle ]; then
             sed -i -E 's/(ndkVersion = flutter.ndkVersion)/ndkVersion = "26.1.10909125"/' android/app/build.gradle || true
-            # force compileSdk again after any overwrite
             sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' android/app/build.gradle
           fi
+
+      - name: Verify Liv source before build
+        run: |
+          set -e
+          grep -q "LivApp" lib/main.dart
+          grep -q "liv_app" pubspec.yaml
+          test -d lib/screens
+          test -d lib/services
+          echo "Pre-build verification passed"
+          head -15 lib/main.dart
 
       - name: Get dependencies
         run: flutter pub get
 
       - name: Generate app icon (launcher icon)
-        run: dart run flutter_launcher_icons || flutter pub run flutter_launcher_icons || true
+        run: |
+          test -f assets/icon/liv_icon.png && echo "Icon PNG found" || (echo "MISSING ICON" && exit 1)
+          dart run flutter_launcher_icons || echo "launcher icons soft-failed"
+          ls android/app/src/main/res/mipmap-*/ 2>/dev/null || true
 
       - name: Build APK (Release)
         run: flutter build apk --release
