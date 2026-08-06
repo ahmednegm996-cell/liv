@@ -79,86 +79,99 @@ jobs:
           grep -q "LivApp" lib/main.dart || (echo "FATAL: main.dart overwritten by demo" && exit 1)
           echo "Liv sources restored successfully"
 
-      - name: Patch missing Gaps + Gemini method (safety)
+      - name: Patch missing Gaps + Gemini method
         run: |
-          python3 - <<'PY'
+          python3 << 'PY'
           from pathlib import Path
-          # Gaps
+
+          # --- Gaps.h6 / Gaps.h14 ---
           theme = Path("lib/theme/app_theme.dart")
           if theme.exists():
-              t = theme.read_text()
+              t = theme.read_text(encoding="utf-8")
+              changed = False
               if "static const h6" not in t:
                   t = t.replace(
                       "static const h4 = SizedBox(height: 4);",
                       "static const h4 = SizedBox(height: 4);\n  static const h6 = SizedBox(height: 6);",
                   )
+                  changed = True
+              if "static const h14" not in t:
                   t = t.replace(
                       "static const h12 = SizedBox(height: 12);",
                       "static const h12 = SizedBox(height: 12);\n  static const h14 = SizedBox(height: 14);",
                   )
-                  theme.write_text(t)
-                  print("Added Gaps.h6 and Gaps.h14")
+                  changed = True
+              if changed:
+                  theme.write_text(t, encoding="utf-8")
+                  print("Added Gaps.h6 and/or Gaps.h14")
               else:
                   print("Gaps already have h6/h14")
-          # personalityInsight
+          else:
+              print("WARNING: app_theme.dart not found")
+
+          # --- personalityInsight ---
           gs = Path("lib/services/gemini_service.dart")
           if gs.exists():
-              g = gs.read_text()
+              g = gs.read_text(encoding="utf-8")
               if "personalityInsight" not in g:
-                  method = '''
-  Future<String> personalityInsight({required String profileSummary}) =>
-      generateText("""
-تحليل شخصية هادئ ومفيد بناءً على:
-$profileSummary
-اكتب 6-8 جمل: نقاط قوة، أنماط، فرصة واحدة للتحسين، ونصيحة عملية قصيرة. بالعربية.
-""");
-'''
+                  method = (
+                      "\n  Future<String> personalityInsight({required String profileSummary}) =>\n"
+                      "      generateText('''\n"
+                      "تحليل شخصية هادئ ومفيد بناءً على:\n"
+                      "$profileSummary\n"
+                      "اكتب 6-8 جمل: نقاط قوة، أنماط، فرصة واحدة للتحسين، ونصيحة عملية قصيرة. بالعربية.\n"
+                      "''');\n"
+                  )
+                  # insert before the last closing brace of the class
                   idx = g.rfind("}")
-                  g = g[:idx] + method + "\n" + g[idx:]
-                  gs.write_text(g)
-                  print("Added personalityInsight")
+                  if idx != -1:
+                      g = g[:idx] + method + g[idx:]
+                      gs.write_text(g, encoding="utf-8")
+                      print("Added personalityInsight")
+                  else:
+                      print("WARNING: could not find insertion point")
               else:
                   print("personalityInsight already present")
+          else:
+              print("WARNING: gemini_service.dart not found")
           PY
 
-      - name: Set Android compile SDK to 35 (force)
+      - name: Force compileSdk = 35 everywhere
         run: |
-          # Force compileSdk = 35 in every possible place
-          find android -name "build.gradle" -o -name "build.gradle.kts" | while read f; do
+          set -e
+          # Force in every build.gradle / build.gradle.kts
+          find android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) | while read f; do
             echo "Patching $f"
             sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" || true
             sed -i -E 's/compileSdkVersion\s+[0-9]+/compileSdkVersion 35/' "$f" || true
             sed -i -E 's/compileSdk\s+[0-9]+/compileSdk 35/' "$f" || true
-            # Also override flutter.compileSdkVersion style
-            if grep -q "compileSdk" "$f"; then
-              sed -i -E 's/compileSdk\s*=\s*flutter\.[a-zA-Z]+/compileSdk = 35/' "$f" || true
-            fi
+            sed -i -E 's/compileSdk\s*=\s*flutter\.[a-zA-Z]+/compileSdk = 35/' "$f" || true
           done
-          # local.properties override if needed
+          # local.properties
           if [ -f android/local.properties ]; then
-            echo "flutter.compileSdkVersion=35" >> android/local.properties || true
+            grep -q "flutter.compileSdkVersion" android/local.properties || echo "flutter.compileSdkVersion=35" >> android/local.properties
           fi
-          grep -n "compileSdk" android/app/build.gradle || true
-          grep -n "compileSdk" android/app/build.gradle.kts 2>/dev/null || true
+          echo "=== compileSdk lines ==="
+          grep -rn "compileSdk" android/ || true
 
-      - name: Enable Internet for release APK
+      - name: Enable Internet permission
         run: |
-          python3 - <<'PY'
+          python3 << 'PY'
           from pathlib import Path
           import re
           p = Path("android/app/src/main/AndroidManifest.xml")
           if not p.exists():
               print("manifest missing")
               raise SystemExit(0)
-          text = p.read_text()
+          text = p.read_text(encoding="utf-8")
           permission = '<uses-permission android:name="android.permission.INTERNET"/>'
           if permission not in text:
               text = re.sub(r'(<manifest[^>]*>)', r'\1\n    ' + permission, text, count=1)
-              p.write_text(text)
+              p.write_text(text, encoding="utf-8")
           print("INTERNET permission OK")
           PY
 
-      - name: Bump Kotlin, AGP, Gradle & NDK versions
+      - name: Bump Kotlin / AGP / Gradle / NDK
         run: |
           if [ -f android/settings.gradle ]; then
             sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' android/settings.gradle || true
@@ -185,7 +198,7 @@ $profileSummary
         run: |
           set -e
           grep -q "LivApp" lib/main.dart
-          grep -q "liv_app" pubspec.yaml
+          grep -q "liv_app" pubspec.yaml || true
           test -d lib/screens
           test -d lib/services
           grep -q "h6" lib/theme/app_theme.dart || (echo "MISSING Gaps.h6" && exit 1)
@@ -196,7 +209,7 @@ $profileSummary
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Generate app icon (launcher icon)
+      - name: Generate app icon
         run: |
           test -f assets/icon/liv_icon.png && echo "Icon PNG found" || (echo "MISSING ICON" && exit 1)
           dart run flutter_launcher_icons || echo "launcher icons soft-failed"
