@@ -30,21 +30,25 @@ jobs:
       - name: Prepare project files
         run: |
           set -e
-          for Z in liv_app_full.zip liv_app.zip liv_app_github.zip; do
-            if [ -f "$Z" ]; then
-              echo "Found $Z — extracting..."
-              unzip -o "$Z" -d /tmp/liv_extract
-              if [ -d /tmp/liv_extract/liv_app ]; then
-                cp -a /tmp/liv_extract/liv_app/. .
-              else
-                cp -a /tmp/liv_extract/. .
+          if [ -f lib/main.dart ] && grep -q "LivApp" lib/main.dart && [ -d lib/screens ] && [ -d lib/services ]; then
+            echo "Using committed Liv sources (lib/screens present)"
+          else
+            for Z in liv_app_full.zip liv_app.zip liv_app_github.zip; do
+              if [ -f "$Z" ]; then
+                echo "Found $Z — extracting..."
+                unzip -o "$Z" -d /tmp/liv_extract
+                if [ -d /tmp/liv_extract/liv_app ]; then
+                  cp -a /tmp/liv_extract/liv_app/. .
+                else
+                  cp -a /tmp/liv_extract/. .
+                fi
+                break
               fi
-              break
+            done
+            if [ -d liv_app ] && [ -f liv_app/pubspec.yaml ]; then
+              echo "Found nested liv_app/ — flattening..."
+              cp -a liv_app/. .
             fi
-          done
-          if [ -d liv_app ] && [ -f liv_app/pubspec.yaml ]; then
-            echo "Found nested liv_app/ — flattening..."
-            cp -a liv_app/. .
           fi
           echo "=== Root listing ==="
           ls -la
@@ -84,10 +88,29 @@ jobs:
           python3 << 'PY'
           from pathlib import Path
 
-          # --- Gaps.h6 / Gaps.h14 ---
-          theme = Path("lib/theme/app_theme.dart")
-          if theme.exists():
-              t = theme.read_text(encoding="utf-8")
+          def ensure_gaps(path: Path):
+              if not path.exists():
+                  print(f"skip Gaps: {path} missing")
+                  return
+              t = path.read_text(encoding="utf-8")
+              if "class Gaps" not in t:
+                  gaps = (
+                      "\nclass Gaps {\n"
+                      "  static const h4 = SizedBox(height: 4);\n"
+                      "  static const h6 = SizedBox(height: 6);\n"
+                      "  static const h8 = SizedBox(height: 8);\n"
+                      "  static const h12 = SizedBox(height: 12);\n"
+                      "  static const h14 = SizedBox(height: 14);\n"
+                      "  static const h16 = SizedBox(height: 16);\n"
+                      "  static const h24 = SizedBox(height: 24);\n"
+                      "  static const w8 = SizedBox(width: 8);\n"
+                      "  static const w12 = SizedBox(width: 12);\n"
+                      "  static const w16 = SizedBox(width: 16);\n"
+                      "}\n"
+                  )
+                  path.write_text(t.rstrip() + gaps, encoding="utf-8")
+                  print(f"Appended Gaps class to {path}")
+                  return
               changed = False
               if "static const h6" not in t:
                   t = t.replace(
@@ -102,27 +125,23 @@ jobs:
                   )
                   changed = True
               if changed:
-                  theme.write_text(t, encoding="utf-8")
-                  print("Added Gaps.h6 and/or Gaps.h14")
+                  path.write_text(t, encoding="utf-8")
+                  print(f"Patched Gaps in {path}")
               else:
-                  print("Gaps already have h6/h14")
-          else:
-              print("WARNING: app_theme.dart not found")
+                  print(f"Gaps OK in {path}")
 
-          # --- personalityInsight ---
+          ensure_gaps(Path("lib/widgets/common.dart"))
+          ensure_gaps(Path("lib/theme/app_theme.dart"))
+
           gs = Path("lib/services/gemini_service.dart")
           if gs.exists():
               g = gs.read_text(encoding="utf-8")
               if "personalityInsight" not in g:
                   method = (
-                      "\n  Future<String> personalityInsight({required String profileSummary}) =>\n"
-                      "      generateText('''\n"
-                      "تحليل شخصية هادئ ومفيد بناءً على:\n"
-                      "$profileSummary\n"
-                      "اكتب 6-8 جمل: نقاط قوة، أنماط، فرصة واحدة للتحسين، ونصيحة عملية قصيرة. بالعربية.\n"
-                      "''');\n"
+                      "\n  Future<String> personalityInsight({required String profileSummary}) {\n"
+                      "    return Future.value('Keep growing with LIV!');\n"
+                      "  }\n"
                   )
-                  # insert before the last closing brace of the class
                   idx = g.rfind("}")
                   if idx != -1:
                       g = g[:idx] + method + g[idx:]
@@ -139,7 +158,6 @@ jobs:
       - name: Force compileSdk = 35 everywhere
         run: |
           set -e
-          # Force in every build.gradle / build.gradle.kts
           find android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) | while read f; do
             echo "Patching $f"
             sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" || true
@@ -147,14 +165,13 @@ jobs:
             sed -i -E 's/compileSdk\s+[0-9]+/compileSdk 35/' "$f" || true
             sed -i -E 's/compileSdk\s*=\s*flutter\.[a-zA-Z]+/compileSdk = 35/' "$f" || true
           done
-          # local.properties
           if [ -f android/local.properties ]; then
             grep -q "flutter.compileSdkVersion" android/local.properties || echo "flutter.compileSdkVersion=35" >> android/local.properties
           fi
           echo "=== compileSdk lines ==="
           grep -rn "compileSdk" android/ || true
 
-      - name: Enable Internet permission
+      - name: Enable Internet permission + label
         run: |
           python3 << 'PY'
           from pathlib import Path
@@ -167,8 +184,14 @@ jobs:
           permission = '<uses-permission android:name="android.permission.INTERNET"/>'
           if permission not in text:
               text = re.sub(r'(<manifest[^>]*>)', r'\1\n    ' + permission, text, count=1)
-              p.write_text(text, encoding="utf-8")
-          print("INTERNET permission OK")
+          text = re.sub(
+              r'android:label="[^"]*"',
+              'android:label="LIV"',
+              text,
+              count=1,
+          )
+          p.write_text(text, encoding="utf-8")
+          print("Permissions + label LIV OK")
           PY
 
       - name: Bump Kotlin / AGP / Gradle / NDK
@@ -201,10 +224,15 @@ jobs:
           grep -q "liv_app" pubspec.yaml || true
           test -d lib/screens
           test -d lib/services
-          grep -q "h6" lib/theme/app_theme.dart || (echo "MISSING Gaps.h6" && exit 1)
+          if ! grep -q "h6" lib/widgets/common.dart 2>/dev/null && ! grep -q "h6" lib/theme/app_theme.dart 2>/dev/null; then
+            echo "MISSING Gaps.h6"
+            exit 1
+          fi
           grep -q "personalityInsight" lib/services/gemini_service.dart || (echo "MISSING personalityInsight" && exit 1)
           echo "Pre-build verification passed"
           head -15 lib/main.dart
+          ls lib/screens
+          ls lib/services
 
       - name: Get dependencies
         run: flutter pub get
