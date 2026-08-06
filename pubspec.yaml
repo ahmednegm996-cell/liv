@@ -1,7 +1,7 @@
 name: liv_app
-description: "Liv - تطبيق إدارة الحياة الشخصية: عادات، أهداف، أحلام، ونقاط، بمساعدة الذكاء الاصطناعي."
+description: "LIV - Personal life manager: habits, goals, dreams, points, with AI help."
 publish_to: 'none'
-version: 1.3.2+7
+version: 1.4.0+8
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -16,6 +16,8 @@ dependencies:
   provider: ^6.1.2
   google_fonts: ^6.2.1
   audioplayers: ^6.1.0
+  speech_to_text: ^7.0.0
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
