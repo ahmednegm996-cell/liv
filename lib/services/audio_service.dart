@@ -8,7 +8,6 @@ class AudioService {
   final AudioPlayer _player = AudioPlayer();
   String? _currentAsset;
 
-  /// صوت نقرة بسيط زي تطبيقات أبل (للـ pickers و Next)
   Future<void> tick() async {
     try {
       await SystemSound.play(SystemSoundType.click);
@@ -25,9 +24,7 @@ class AudioService {
       await _player.setReleaseMode(ReleaseMode.loop);
       await _player.setVolume(volume.clamp(0.0, 1.0));
       await _player.play(AssetSource(assetPath.replaceFirst('assets/', '')));
-    } catch (_) {
-      // Missing asset or platform limitation — stay silent
-    }
+    } catch (_) {}
   }
 
   Future<void> setVolume(double v) async {
