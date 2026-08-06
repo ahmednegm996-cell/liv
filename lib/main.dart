@@ -29,32 +29,55 @@ class LivApp extends StatelessWidget {
             default:
               mode = ThemeMode.system;
           }
-
+          final danger = state.profile.hearts <= 0;
+          final accent = state.profile.accentColor;
           final isRtl = state.profile.locale != 'en';
 
           return MaterialApp(
             title: 'Liv',
             debugShowCheckedModeBanner: false,
-            theme: buildLivTheme(Brightness.light, state.profile.accentColor),
-            darkTheme: buildLivTheme(Brightness.dark, state.profile.accentColor),
+            theme: AppTheme.light(accent: accent, danger: danger),
+            darkTheme: AppTheme.dark(accent: accent, danger: danger),
             themeMode: mode,
-            locale: Locale(state.profile.locale == 'en' ? 'en' : 'ar'),
-            builder: (context, child) {
-              return Directionality(
-                textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
-                child: child ?? const SizedBox.shrink(),
-              );
-            },
-            home: state.loading
-                ? const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  )
-                : (state.profile.hasOnboarded
-                    ? const RootShell()
-                    : const OnboardingScreen()),
+            builder: (context, child) => Directionality(
+              textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+              child: child!,
+            ),
+            home: const _StartupGate(),
           );
         },
       ),
     );
+  }
+}
+
+class _StartupGate extends StatelessWidget {
+  const _StartupGate();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    if (state.isLoading) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: state.profile.hearts <= 0
+                    ? AppColors.danger
+                    : AppColors.accentFrom(state.profile.accentColor),
+              ),
+              const SizedBox(height: 16),
+              Text(state.profile.locale == 'en' ? 'Liv is opening...' : 'Liv بيفتح ليك...'),
+            ],
+          ),
+        ),
+      );
+    }
+    if (!state.profile.hasOnboarded) {
+      return const OnboardingScreen();
+    }
+    return const RootShell();
   }
 }
