@@ -28,8 +28,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/audio/welcome_ambient.wav
-    - assets/audio/ai_ambient.wav
     - assets/icon/liv_icon.png
 
 flutter_launcher_icons:

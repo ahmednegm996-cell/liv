@@ -1,13 +1,16 @@
-# Liv
+# LIV
 
-تطبيق Flutter لإدارة الحياة + Gemini AI.
+Personal life manager — habits, goals, dreams, points, AI coach.
 
-## البناء على GitHub Actions
+## Build APK
 
-Workflow: Build APK
-Artifact: liv-apk
+Use the **Build APK** GitHub Action (Actions → Build APK → Run workflow).
 
-## ملاحظات
+Or locally:
 
-- الموديل الافتراضي: gemini-flash-lite-latest
-- الصق API Key من البروفايل
+```bash
+flutter pub get
+flutter build apk --release
+```
+
+App name on device: **LIV**
