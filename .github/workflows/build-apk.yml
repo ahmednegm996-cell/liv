@@ -87,6 +87,21 @@ jobs:
         run: |
           python3 << 'PY'
           from pathlib import Path
+          import re
+
+          # Keep Gaps ONLY in common.dart to avoid duplicate-class import conflicts
+          common = Path("lib/widgets/common.dart")
+          theme = Path("lib/theme/app_theme.dart")
+
+          # Remove any Gaps class from app_theme.dart if present
+          if theme.exists():
+              t = theme.read_text(encoding="utf-8")
+              if "class Gaps" in t:
+                  t2 = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n", t)
+                  theme.write_text(t2.rstrip() + "\n", encoding="utf-8")
+                  print("Removed Gaps from app_theme.dart")
+              else:
+                  print("No Gaps in app_theme.dart (good)")
 
           def ensure_gaps(path: Path):
               if not path.exists():
@@ -130,8 +145,7 @@ jobs:
               else:
                   print(f"Gaps OK in {path}")
 
-          ensure_gaps(Path("lib/widgets/common.dart"))
-          ensure_gaps(Path("lib/theme/app_theme.dart"))
+          ensure_gaps(common)
 
           gs = Path("lib/services/gemini_service.dart")
           if gs.exists():
@@ -224,8 +238,12 @@ jobs:
           grep -q "liv_app" pubspec.yaml || true
           test -d lib/screens
           test -d lib/services
-          if ! grep -q "h6" lib/widgets/common.dart 2>/dev/null && ! grep -q "h6" lib/theme/app_theme.dart 2>/dev/null; then
-            echo "MISSING Gaps.h6"
+          if ! grep -q "class Gaps" lib/widgets/common.dart 2>/dev/null; then
+            echo "MISSING Gaps in common.dart"
+            exit 1
+          fi
+          if grep -q "class Gaps" lib/theme/app_theme.dart 2>/dev/null; then
+            echo "ERROR: Gaps must not be in app_theme.dart (duplicate)"
             exit 1
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart || (echo "MISSING personalityInsight" && exit 1)
