@@ -102,47 +102,39 @@ jobs:
               else:
                   print("No Gaps in app_theme.dart (good)")
 
+          # Complete Gaps matching full Liv sources (all sizes used: h4-h32, w8/w12)
+          COMPLETE_GAPS = """
+class Gaps {
+  static const h4 = SizedBox(height: 4);
+  static const h6 = SizedBox(height: 6);
+  static const h8 = SizedBox(height: 8);
+  static const h10 = SizedBox(height: 10);
+  static const h12 = SizedBox(height: 12);
+  static const h14 = SizedBox(height: 14);
+  static const h16 = SizedBox(height: 16);
+  static const h18 = SizedBox(height: 18);
+  static const h20 = SizedBox(height: 20);
+  static const h24 = SizedBox(height: 24);
+  static const h32 = SizedBox(height: 32);
+  static const w8 = SizedBox(width: 8);
+  static const w12 = SizedBox(width: 12);
+  static const w16 = SizedBox(width: 16);
+}
+"""
+
           def ensure_gaps(path: Path):
               if not path.exists():
                   print(f"skip Gaps: {path} missing")
                   return
               t = path.read_text(encoding="utf-8")
-              if "class Gaps" not in t:
-                  gaps = (
-                      "\nclass Gaps {\n"
-                      "  static const h4 = SizedBox(height: 4);\n"
-                      "  static const h6 = SizedBox(height: 6);\n"
-                      "  static const h8 = SizedBox(height: 8);\n"
-                      "  static const h12 = SizedBox(height: 12);\n"
-                      "  static const h14 = SizedBox(height: 14);\n"
-                      "  static const h16 = SizedBox(height: 16);\n"
-                      "  static const h24 = SizedBox(height: 24);\n"
-                      "  static const w8 = SizedBox(width: 8);\n"
-                      "  static const w12 = SizedBox(width: 12);\n"
-                      "  static const w16 = SizedBox(width: 16);\n"
-                      "}\n"
-                  )
-                  path.write_text(t.rstrip() + gaps, encoding="utf-8")
-                  print(f"Appended Gaps class to {path}")
-                  return
-              changed = False
-              if "static const h6" not in t:
-                  t = t.replace(
-                      "static const h4 = SizedBox(height: 4);",
-                      "static const h4 = SizedBox(height: 4);\n  static const h6 = SizedBox(height: 6);",
-                  )
-                  changed = True
-              if "static const h14" not in t:
-                  t = t.replace(
-                      "static const h12 = SizedBox(height: 12);",
-                      "static const h12 = SizedBox(height: 12);\n  static const h14 = SizedBox(height: 14);",
-                  )
-                  changed = True
-              if changed:
-                  path.write_text(t, encoding="utf-8")
-                  print(f"Patched Gaps in {path}")
+              if "class Gaps" in t:
+                  # Replace existing Gaps class with the complete one
+                  t2 = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n" + COMPLETE_GAPS.strip() + "\n", t)
+                  path.write_text(t2.rstrip() + "\n", encoding="utf-8")
+                  print(f"Replaced Gaps with complete definition in {path}")
               else:
-                  print(f"Gaps OK in {path}")
+                  path.write_text(t.rstrip() + "\n" + COMPLETE_GAPS, encoding="utf-8")
+                  print(f"Appended complete Gaps class to {path}")
 
           ensure_gaps(common)
 
@@ -241,6 +233,10 @@ jobs:
             echo "MISSING Gaps in common.dart"
             exit 1
           fi
+          if ! grep -q "static const h20" lib/widgets/common.dart 2>/dev/null; then
+            echo "MISSING Gaps.h20 in common.dart"
+            exit 1
+          fi
           if grep -q "class Gaps" lib/theme/app_theme.dart 2>/dev/null; then
             echo "ERROR: Gaps must not be in app_theme.dart (duplicate)"
             exit 1
@@ -250,6 +246,8 @@ jobs:
           head -15 lib/main.dart
           ls lib/screens
           ls lib/services
+          echo "=== Gaps members ==="
+          grep -E "static const h|static const w" lib/widgets/common.dart || true
 
       - name: Get dependencies
         run: flutter pub get
