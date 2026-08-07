@@ -87,6 +87,7 @@ jobs:
           python3 << 'PY'
           from pathlib import Path
           import re
+          import textwrap
 
           # Keep Gaps ONLY in common.dart to avoid duplicate-class import conflicts
           common = Path("lib/widgets/common.dart")
@@ -103,24 +104,25 @@ jobs:
                   print("No Gaps in app_theme.dart (good)")
 
           # Complete Gaps matching full Liv sources (all sizes used: h4-h32, w8/w12)
+          # NOTE: content indented for YAML | block; textwrap.dedent restores clean Dart
           COMPLETE_GAPS = """
-class Gaps {
-  static const h4 = SizedBox(height: 4);
-  static const h6 = SizedBox(height: 6);
-  static const h8 = SizedBox(height: 8);
-  static const h10 = SizedBox(height: 10);
-  static const h12 = SizedBox(height: 12);
-  static const h14 = SizedBox(height: 14);
-  static const h16 = SizedBox(height: 16);
-  static const h18 = SizedBox(height: 18);
-  static const h20 = SizedBox(height: 20);
-  static const h24 = SizedBox(height: 24);
-  static const h32 = SizedBox(height: 32);
-  static const w8 = SizedBox(width: 8);
-  static const w12 = SizedBox(width: 12);
-  static const w16 = SizedBox(width: 16);
-}
-"""
+          class Gaps {
+            static const h4 = SizedBox(height: 4);
+            static const h6 = SizedBox(height: 6);
+            static const h8 = SizedBox(height: 8);
+            static const h10 = SizedBox(height: 10);
+            static const h12 = SizedBox(height: 12);
+            static const h14 = SizedBox(height: 14);
+            static const h16 = SizedBox(height: 16);
+            static const h18 = SizedBox(height: 18);
+            static const h20 = SizedBox(height: 20);
+            static const h24 = SizedBox(height: 24);
+            static const h32 = SizedBox(height: 32);
+            static const w8 = SizedBox(width: 8);
+            static const w12 = SizedBox(width: 12);
+            static const w16 = SizedBox(width: 16);
+          }
+          """
 
           def ensure_gaps(path: Path):
               if not path.exists():
@@ -129,11 +131,11 @@ class Gaps {
               t = path.read_text(encoding="utf-8")
               if "class Gaps" in t:
                   # Replace existing Gaps class with the complete one
-                  t2 = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n" + COMPLETE_GAPS.strip() + "\n", t)
+                  t2 = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n", t)
                   path.write_text(t2.rstrip() + "\n", encoding="utf-8")
                   print(f"Replaced Gaps with complete definition in {path}")
               else:
-                  path.write_text(t.rstrip() + "\n" + COMPLETE_GAPS, encoding="utf-8")
+                  path.write_text(t.rstrip() + "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n", encoding="utf-8")
                   print(f"Appended complete Gaps class to {path}")
 
           ensure_gaps(common)
