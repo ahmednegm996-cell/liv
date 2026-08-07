@@ -1,7 +1,7 @@
 name: liv_app
 description: "LIV - Personal life manager: habits, goals, dreams, points, with AI help."
 publish_to: 'none'
-version: 1.4.0+8
+version: 1.4.0+9
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -16,7 +16,8 @@ dependencies:
   provider: ^6.1.2
   google_fonts: ^6.2.1
   audioplayers: ^6.1.0
-  speech_to_text: ^7.0.0
+  # Pin to 6.6.2 — 7.x breaks with Flutter 3.24 + current AGP (unknown property 'flutter')
+  speech_to_text: 6.6.2
   permission_handler: ^11.3.1
 
 dev_dependencies:
