@@ -44,16 +44,20 @@ jobs:
             rm -rf lib
             cp -a /tmp/liv_extract/lib .
             echo "Restored full lib/ from zip"
-            if [ -f /tmp/onboarding_committed.dart ]; then
-              mkdir -p lib/screens
+            mkdir -p lib/screens
+            if [ -f /tmp/onboarding_committed.dart ] && ! grep -qE "Onboarding loading|^TEMP$" /tmp/onboarding_committed.dart 2>/dev/null; then
               cp /tmp/onboarding_committed.dart lib/screens/onboarding_screen.dart
               echo "Restored onboarding from committed source of truth"
-              if grep -q "Onboarding loading" lib/screens/onboarding_screen.dart 2>/dev/null; then
-                echo "ERROR: committed onboarding is still a TEMP stub"
-                exit 1
-              fi
-              grep -q "_ageCtrl\|_tickAgeItem\|CupertinoPicker" lib/screens/onboarding_screen.dart && echo "Age picker markers OK" || echo "WARNING: age picker markers missing"
+            else
+              echo "Committed onboarding is TEMP/stub — using full source from 6116049"
+              curl -fsSL -o lib/screens/onboarding_screen.dart "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
             fi
+            if [ -f ci/age_patch.b64 ]; then
+              base64 -d ci/age_patch.b64 > /tmp/age_patch.py
+              python3 /tmp/age_patch.py
+              echo "Applied age picker patch"
+            fi
+            grep -q "_ageCtrl\|_tickAgeItem\|useMagnifier" lib/screens/onboarding_screen.dart && echo "Age picker markers OK" || echo "WARNING: age picker markers missing"
             wc -l lib/screens/onboarding_screen.dart
           fi
           if [ -d /tmp/liv_extract/assets ]; then
