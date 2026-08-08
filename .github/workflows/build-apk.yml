@@ -60,7 +60,13 @@ jobs:
               python3 /tmp/age_patch.py
               echo "Applied age picker patch"
             fi
+            if [ -f ci/period_nav_patch.py ]; then
+              python3 ci/period_nav_patch.py
+              echo "Applied period bottom nav + PeriodScreen"
+            fi
             grep -q "_periodSection\|_trackPeriod\|_tickAgeItem\|useMagnifier" lib/screens/onboarding_screen.dart && echo "UX markers OK" || echo "WARNING: UX markers missing"
+            grep -q "PeriodScreen\|showPeriod\|water_drop_rounded" lib/screens/root_shell.dart && echo "Period nav OK" || echo "WARNING: Period nav missing"
+            test -f lib/screens/period_screen.dart && echo "period_screen.dart present" || echo "WARNING: period_screen.dart missing"
             wc -l lib/screens/onboarding_screen.dart
           fi
           if [ -d /tmp/liv_extract/assets ]; then
