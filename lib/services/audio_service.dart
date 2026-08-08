@@ -9,10 +9,14 @@ class AudioService {
   String? _currentAsset;
 
   Future<void> tick() async {
-    try {
-      await SystemSound.play(SystemSoundType.click);
-    } catch (_) {}
-  }
+  try {
+    await SystemSound.play(SystemSoundType.click);
+  } catch (_) {}
+
+  try {
+    await HapticFeedback.selectionClick();
+  } catch (_) {}
+}
 
   Future<void> playLoop(String assetPath, {double volume = 0.22}) async {
     try {
