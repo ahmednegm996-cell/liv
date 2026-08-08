@@ -39,6 +39,10 @@ jobs:
             rm -rf lib
             cp -a /tmp/liv_extract/lib .
             echo "Restored full lib/ from zip"
+            # Prefer committed onboarding UX improvements (language box, gender colors, Other typing, AI analyzing)
+            if git show HEAD:lib/screens/onboarding_screen.dart > lib/screens/onboarding_screen.dart 2>/dev/null; then
+              echo "Overrode onboarding_screen.dart with committed UX version"
+            fi
           fi
           if [ -d /tmp/liv_extract/assets ]; then
             mkdir -p assets
@@ -244,6 +248,7 @@ jobs:
             exit 1
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart || (echo "MISSING personalityInsight" && exit 1)
+          grep -q "_pickLanguage\|_analyzing\|_maleColor" lib/screens/onboarding_screen.dart || (echo "WARNING: new onboarding features may be missing" && true)
           echo "Pre-build verification passed"
           head -15 lib/main.dart
           ls lib/screens
