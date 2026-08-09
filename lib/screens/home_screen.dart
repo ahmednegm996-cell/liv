@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     _ageAnimationStarted = true;
 
-    final safeAge = realAge.clamp(0.0, 120.0);
+    final double safeAge = realAge.clamp(0.0, 120.0).toDouble();
 
     _ageController = AnimationController(
       vsync: this,
