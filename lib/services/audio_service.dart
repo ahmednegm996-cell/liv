@@ -10,11 +10,11 @@ class AudioService {
 
   Future<void> tick() async {
   try {
-    await SystemSound.play(SystemSoundType.click);
+    await HapticFeedback.selectionClick();
   } catch (_) {}
 
   try {
-    await HapticFeedback.selectionClick();
+    await SystemSound.play(SystemSoundType.click);
   } catch (_) {}
 }
 
