@@ -1066,15 +1066,20 @@ jobs:
       # FLUTTER ANALYZE
       # ======================================================
 
-           - name: Flutter analyze
+                - name: Flutter analyze
         run: |
           echo "Running Flutter analyze..."
 
-          flutter analyze || ANALYZE_EXIT=$?
+          set +e
+          flutter analyze
+          ANALYZE_EXIT=$?
+          set -e
 
-          if [ "${ANALYZE_EXIT:-0}" -ne 0 ]; then
+          echo "Flutter analyze exit code: $ANALYZE_EXIT"
+
+          if [ "$ANALYZE_EXIT" -ne 0 ]; then
             echo "Flutter analyze reported issues."
-            echo "These are lint/info issues and will not block the APK build."
+            echo "Continuing because these are analyzer/lint findings."
           else
             echo "Flutter analyze PASSED"
           fi
