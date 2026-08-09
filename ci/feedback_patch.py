@@ -57,11 +57,7 @@ with wave.open(str(wav_path), "wb") as wav:
         )
 
         sample = tone * attack * decay
-
-        sample = max(
-            -1.0,
-            min(1.0, sample)
-        )
+        sample = max(-1.0, min(1.0, sample))
 
         frames.extend(
             struct.pack(
@@ -76,7 +72,7 @@ print(f"Created picker sound: {wav_path}")
 
 
 # ============================================================
-# 2. Find MainActivity.kt
+# 2. Find generated MainActivity.kt
 # ============================================================
 
 kotlin_root = (
@@ -105,7 +101,7 @@ original = main_activity.read_text(
 
 
 # ============================================================
-# 3. Detect package
+# 3. Detect package name
 # ============================================================
 
 package_match = re.search(
@@ -230,13 +226,12 @@ class MainActivity : FlutterActivity() {{
                 "tick" -> {{
                     playTickSound()
                     playTickHaptic()
-
                     result.success(null)
                 }}
 
-                else -> {
+                else -> {{
                     result.notImplemented()
-                }
+                }}
             }}
         }}
     }}
@@ -294,35 +289,9 @@ class MainActivity : FlutterActivity() {{
                     ) as Vibrator
                 }}
 
+
             if (!vibrator.hasVibrator()) {{
                 return
-            }}
-
-
-            if (
-                Build.VERSION.SDK_INT >=
-                Build.VERSION_CODES.S
-            ) {{
-
-                val support =
-                    vibrator.areEffectsSupported(
-                        VibrationEffect.EFFECT_TICK
-                    )
-
-                if (
-                    support.isNotEmpty() &&
-                    support[0] ==
-                    Vibrator.VIBRATION_EFFECT_SUPPORT_YES
-                ) {{
-
-                    vibrator.vibrate(
-                        VibrationEffect.createPredefined(
-                            VibrationEffect.EFFECT_TICK
-                        )
-                    )
-
-                    return
-                }}
             }}
 
 
@@ -337,11 +306,7 @@ class MainActivity : FlutterActivity() {{
                     )
                 )
 
-                return
-            }}
-
-
-            if (
+            }} else if (
                 Build.VERSION.SDK_INT >=
                 Build.VERSION_CODES.O
             ) {{
@@ -353,12 +318,11 @@ class MainActivity : FlutterActivity() {{
                     )
                 )
 
-                return
+            }} else {{
+
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(8L)
             }}
-
-
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(8L)
 
         }} catch (
             _: Exception
@@ -401,7 +365,7 @@ print(
 
 
 # ============================================================
-# 5. Patch onboarding_screen.dart ROBUSTLY
+# 5. Locate onboarding_screen.dart
 # ============================================================
 
 onboarding = (
@@ -421,24 +385,21 @@ text = onboarding.read_text(
 )
 
 
-# ------------------------------------------------------------
-# 5A. Add AudioService import
-# ------------------------------------------------------------
+# ============================================================
+# 6. Add AudioService import
+# ============================================================
 
-if (
-    "services/audio_service.dart"
-    not in text
-):
+if "services/audio_service.dart" not in text:
 
-    flutter_import = (
+    material_import = (
         "import 'package:flutter/material.dart';"
     )
 
-    if flutter_import in text:
+    if material_import in text:
 
         text = text.replace(
-            flutter_import,
-            flutter_import
+            material_import,
+            material_import
             + "\n"
             + "import '../services/audio_service.dart';",
             1,
@@ -452,40 +413,30 @@ if (
         )
 
 
-# ------------------------------------------------------------
-# 5B. Remove duplicate old age feedback
-# ------------------------------------------------------------
+# ============================================================
+# 7. Replace _tickAgeItem()
+# ============================================================
 
 age_method_pattern = re.compile(
     r"""
-    (\s*)
-    void\s+_tickAgeItem\s*\(\s*\)
-    \s*\{
+    (?P<indent>^[ \t]*)
+    void[ \t]+_tickAgeItem[ \t]*\([ \t]*\)[ \t]*\{
     .*?
-    \n\s*\}
+    ^[ \t]*\}
     """,
-    re.DOTALL | re.VERBOSE,
+    re.DOTALL | re.MULTILINE | re.VERBOSE,
 )
 
 age_method_match = age_method_pattern.search(text)
 
-new_age_method = """
-  void _tickAgeItem() {
-    AudioService.instance.tick();
-  }
-"""
-
 if age_method_match:
 
-    indentation = age_method_match.group(1)
+    indent = age_method_match.group("indent")
 
     replacement = (
-        indentation
-        + "void _tickAgeItem() {\n"
-        + indentation
-        + "  AudioService.instance.tick();\n"
-        + indentation
-        + "}\n"
+        f"{indent}void _tickAgeItem() {{\n"
+        f"{indent}  AudioService.instance.tick();\n"
+        f"{indent}}}"
     )
 
     text = (
@@ -496,45 +447,49 @@ if age_method_match:
 
 else:
 
-    # Insert before _tick if available.
     tick_match = re.search(
-        r"\n\s*Future<void>\s+_tick\s*\(",
-        text
+        r"^[ \t]*Future<void>[ \t]+_tick[ \t]*\(",
+        text,
+        re.MULTILINE,
     )
 
     if tick_match:
 
         insert_at = tick_match.start()
 
+        replacement = (
+            "  void _tickAgeItem() {\n"
+            "    AudioService.instance.tick();\n"
+            "  }\n\n"
+        )
+
         text = (
             text[:insert_at]
-            + "\n"
-            + new_age_method
+            + replacement
             + text[insert_at:]
         )
 
     else:
 
         raise SystemExit(
-            "ERROR: Could not find _tickAgeItem or _tick in onboarding_screen.dart"
+            "ERROR: Could not find _tickAgeItem() "
+            "or _tick() in onboarding_screen.dart."
         )
 
 
-# ------------------------------------------------------------
-# 5C. Find the AGE picker callback
-# ------------------------------------------------------------
+# ============================================================
+# 8. Find the age picker callback
+# ============================================================
 
 callback_pattern = re.compile(
     r"""
     onSelectedItemChanged
     \s*:\s*
     \(
-        \s*([A-Za-z_][A-Za-z0-9_]*)\s*
+        \s*(?P<index>[A-Za-z_][A-Za-z0-9_]*)\s*
     \)
     \s*
-    (?:
-        async\s*
-    )?
+    (?:async\s*)?
     \{
         .*?
     \}
@@ -543,30 +498,29 @@ callback_pattern = re.compile(
     re.DOTALL | re.VERBOSE,
 )
 
-
-matches = list(
+callbacks = list(
     callback_pattern.finditer(text)
 )
 
-
-if not matches:
+if not callbacks:
 
     raise SystemExit(
-        "ERROR: Could not find any onSelectedItemChanged callback."
+        "ERROR: No onSelectedItemChanged callback found."
     )
 
 
-# Prefer the callback containing age assignment.
-
 age_callback = None
 
-for match in matches:
+for match in callbacks:
 
     block = match.group(0)
 
     if (
         "_age" in block
-        and "+ 12" in block
+        and re.search(
+            r"\+\s*12",
+            block
+        )
     ):
         age_callback = match
         break
@@ -575,15 +529,11 @@ for match in matches:
 if age_callback is None:
 
     raise SystemExit(
-        "ERROR: Found picker callbacks, "
-        "but none matched the expected age assignment."
+        "ERROR: Could not identify the Age Picker callback."
     )
 
 
-callback_text = age_callback.group(0)
-
-index_var = age_callback.group(1)
-
+index_var = age_callback.group("index")
 
 new_callback = f"""onSelectedItemChanged: ({index_var}) {{
                   final nextAge = {index_var} + 12;
@@ -608,41 +558,9 @@ text = (
 )
 
 
-# ------------------------------------------------------------
-# 5D. Ensure picker uses magnifier
-# ------------------------------------------------------------
-
-if (
-    "useMagnifier: true"
-    not in text
-):
-
-    # Only patch the first CupertinoPicker-like itemExtent.
-    item_match = re.search(
-        r"itemExtent\s*:\s*40\s*,",
-        text
-    )
-
-    if item_match:
-
-        replacement = """
-itemExtent: 44,
-                diameterRatio: 1.2,
-                squeeze: 1.05,
-                useMagnifier: true,
-                magnification: 1.28,
-"""
-
-        text = (
-            text[:item_match.start()]
-            + replacement
-            + text[item_match.end():]
-        )
-
-
-# ------------------------------------------------------------
-# 5E. Write onboarding
-# ------------------------------------------------------------
+# ============================================================
+# 9. Save onboarding changes
+# ============================================================
 
 onboarding.write_text(
     text,
@@ -655,111 +573,95 @@ print(
 
 
 # ============================================================
-# 6. HARD VERIFICATION
+# 10. HARD VERIFICATION
 # ============================================================
 
 final_text = onboarding.read_text(
     encoding="utf-8"
 )
 
+native_text = main_activity.read_text(
+    encoding="utf-8"
+)
 
 errors = []
 
 
-# AudioService import
-if (
-    "services/audio_service.dart"
-    not in final_text
-):
+if "services/audio_service.dart" not in final_text:
     errors.append(
-        "AudioService import is missing."
+        "AudioService import missing."
     )
 
 
-# Age helper
-if (
-    "void _tickAgeItem()" not in final_text
-):
+if "void _tickAgeItem()" not in final_text:
     errors.append(
-        "_tickAgeItem() is missing."
+        "_tickAgeItem() missing."
     )
 
 
-# Native call
-if (
-    "AudioService.instance.tick();" not in final_text
-):
+if "AudioService.instance.tick();" not in final_text:
     errors.append(
-        "AudioService.instance.tick() is missing."
+        "AudioService.instance.tick() missing."
     )
 
 
-# Picker callback
-if (
-    "onSelectedItemChanged" not in final_text
-):
+if "onSelectedItemChanged" not in final_text:
     errors.append(
-        "onSelectedItemChanged is missing."
+        "Age Picker callback missing."
     )
 
 
-# Age assignment
+if "_tickAgeItem();" not in final_text:
+    errors.append(
+        "Age Picker does not call _tickAgeItem()."
+    )
+
+
 if not re.search(
     r"_age\s*=\s*[A-Za-z_][A-Za-z0-9_]*\s*\+\s*12",
     final_text
 ):
     errors.append(
-        "Age assignment inside picker is missing."
+        "Age assignment was not found."
     )
 
 
-# Picker feedback call
-if (
-    "_tickAgeItem();" not in final_text
-):
+if 'CHANNEL = "liv.feedback"' not in native_text:
     errors.append(
-        "_tickAgeItem() is not called by the picker."
+        "Native MethodChannel missing."
     )
 
 
-# Native bridge
-native_text = main_activity.read_text(
-    encoding="utf-8"
-)
-
-if (
-    'private const val CHANNEL = "liv.feedback"'
-    not in native_text
-):
+if "SoundPool" not in native_text:
     errors.append(
-        "Native MethodChannel is missing."
+        "SoundPool missing."
     )
 
 
-if (
-    "SoundPool" not in native_text
-):
+if "playTickSound()" not in native_text:
     errors.append(
-        "SoundPool is missing."
+        "Native sound method missing."
     )
 
 
-if (
-    "EFFECT_TICK" not in native_text
-):
+if "playTickHaptic()" not in native_text:
     errors.append(
-        "Native EFFECT_TICK haptic is missing."
+        "Native haptic method missing."
     )
 
 
-# Sound
+if "EFFECT_TICK" not in native_text:
+    errors.append(
+        "Native EFFECT_TICK missing."
+    )
+
+
 if not wav_path.exists():
     errors.append(
-        "Picker WAV file was not generated."
+        "liv_picker_tick.wav was not generated."
     )
 
 
-# Permission
 manifest = (
     ROOT
     / "android"
@@ -769,7 +671,13 @@ manifest = (
     / "AndroidManifest.xml"
 )
 
-if manifest.exists():
+if not manifest.exists():
+
+    errors.append(
+        "AndroidManifest.xml missing."
+    )
+
+else:
 
     manifest_text = manifest.read_text(
         encoding="utf-8"
@@ -780,18 +688,12 @@ if manifest.exists():
         not in manifest_text
     ):
         errors.append(
-            "VIBRATE permission is missing."
+            "VIBRATE permission missing."
         )
-
-else:
-
-    errors.append(
-        "AndroidManifest.xml is missing."
-    )
 
 
 # ============================================================
-# 7. FAIL THE BUILD IF ANYTHING IS WRONG
+# 11. Fail the build if verification fails
 # ============================================================
 
 if errors:
@@ -802,19 +704,19 @@ if errors:
     print("========================================")
 
     for error in errors:
-        print("ERROR:", error)
+        print(f"ERROR: {error}")
 
     print("")
     print(
-        "The APK will NOT be built because "
-        "native picker feedback is not verified."
+        "APK build stopped because "
+        "picker feedback could not be verified."
     )
 
     raise SystemExit(1)
 
 
 # ============================================================
-# SUCCESS
+# 12. Success
 # ============================================================
 
 print("")
@@ -822,15 +724,15 @@ print("========================================")
 print("LIV FEEDBACK PATCH VERIFIED")
 print("========================================")
 print("")
-print("✓ Picker sound generated")
-print("✓ SoundPool installed")
-print("✓ Native MethodChannel installed")
-print("✓ Native haptic installed")
-print("✓ VIBRATE permission detected")
-print("✓ AudioService connected")
-print("✓ Age picker callback detected")
-print("✓ Age picker calls _tickAgeItem()")
-print("✓ _tickAgeItem() calls AudioService.instance.tick()")
+print("OK - picker sound generated")
+print("OK - SoundPool installed")
+print("OK - MethodChannel installed")
+print("OK - native haptic installed")
+print("OK - VIBRATE permission detected")
+print("OK - AudioService connected")
+print("OK - Age Picker callback detected")
+print("OK - Age Picker calls _tickAgeItem()")
+print("OK - _tickAgeItem() calls AudioService.instance.tick()")
 print("")
-print("Native picker feedback is ready for APK build.")
+print("Native picker feedback is ready.")
 print("========================================")
