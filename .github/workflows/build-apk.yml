@@ -35,23 +35,31 @@ jobs:
           rm -rf /tmp/liv_extract
           mkdir -p /tmp/liv_extract
           unzip -o /tmp/liv_app_full.zip -d /tmp/liv_extract
+
           if [ -f lib/screens/onboarding_screen.dart ]; then
             cp lib/screens/onboarding_screen.dart /tmp/onboarding_committed.dart
             echo "Saved committed onboarding (source of truth)"
             wc -l /tmp/onboarding_committed.dart
           fi
+
           if [ -d /tmp/liv_extract/lib ]; then
             rm -rf lib
             cp -a /tmp/liv_extract/lib .
             echo "Restored full lib/ from zip"
+
             mkdir -p lib/screens
+
             if [ -f /tmp/onboarding_committed.dart ] && ! grep -qE "Onboarding loading|^TEMP$" /tmp/onboarding_committed.dart 2>/dev/null; then
               cp /tmp/onboarding_committed.dart lib/screens/onboarding_screen.dart
               echo "Restored onboarding from committed source of truth"
             else
               echo "Committed onboarding is TEMP/stub — using full source from 6116049"
-              curl -fsSL -o lib/screens/onboarding_screen.dart "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
+
+              curl -fsSL \
+                -o lib/screens/onboarding_screen.dart \
+                "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
             fi
+
             if [ -f ci/ux_period_patch.py ]; then
               python3 ci/ux_period_patch.py
               echo "Applied UX period + colors + age patch"
@@ -60,61 +68,112 @@ jobs:
               python3 /tmp/age_patch.py
               echo "Applied age picker patch"
             fi
+
             if [ -f ci/period_nav_patch.py ]; then
               python3 ci/period_nav_patch.py
               echo "Applied period bottom nav + PeriodScreen"
             fi
-            grep -q "_periodSection\|_trackPeriod\|_tickAgeItem\|useMagnifier" lib/screens/onboarding_screen.dart && echo "UX markers OK" || echo "WARNING: UX markers missing"
-            grep -q "PeriodScreen\|showPeriod\|water_drop_rounded" lib/screens/root_shell.dart && echo "Period nav OK" || echo "WARNING: Period nav missing"
-            test -f lib/screens/period_screen.dart && echo "period_screen.dart present" || echo "WARNING: period_screen.dart missing"
+
+            grep -q "_periodSection\|_trackPeriod\|_tickAgeItem\|useMagnifier" lib/screens/onboarding_screen.dart \
+              && echo "UX markers OK" \
+              || echo "WARNING: UX markers missing"
+
+            grep -q "PeriodScreen\|showPeriod\|water_drop_rounded" lib/screens/root_shell.dart \
+              && echo "Period nav OK" \
+              || echo "WARNING: Period nav missing"
+
+            test -f lib/screens/period_screen.dart \
+              && echo "period_screen.dart present" \
+              || echo "WARNING: period_screen.dart missing"
+
             wc -l lib/screens/onboarding_screen.dart
           fi
+
           if [ -d /tmp/liv_extract/assets ]; then
             mkdir -p assets
             cp -a /tmp/liv_extract/assets/. assets/
             echo "Restored assets/"
           fi
+
           if [ -f /tmp/liv_extract/pubspec.yaml ]; then
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
             echo "Restored pubspec.yaml"
           fi
-          test -f pubspec.yaml || (echo "ERROR: pubspec missing" && exit 1)
-          test -f lib/main.dart || (echo "ERROR: main missing" && exit 1)
-          grep -q "LivApp" lib/main.dart || (echo "ERROR: not LivApp" && exit 1)
+
+          test -f pubspec.yaml || (
+            echo "ERROR: pubspec missing"
+            exit 1
+          )
+
+          test -f lib/main.dart || (
+            echo "ERROR: main missing"
+            exit 1
+          )
+
+          grep -q "LivApp" lib/main.dart || (
+            echo "ERROR: not LivApp"
+            exit 1
+          )
+
           echo "Project files OK"
 
       - name: Backup Dart sources before flutter create
         run: |
           rm -rf /tmp/liv_lib_backup /tmp/liv_pubspec_backup
+
           cp -a lib /tmp/liv_lib_backup
           cp pubspec.yaml /tmp/liv_pubspec_backup
+
           mkdir -p /tmp/liv_assets_backup
           cp -a assets /tmp/liv_assets_backup/ 2>/dev/null || true
 
       - name: Scaffold native Android only
         run: |
           set -e
-          flutter create --platforms=android --org com.liv --project-name liv_app . || true
+
+          flutter create \
+            --platforms=android \
+            --org com.liv \
+            --project-name liv_app . || true
+
           rm -rf lib
           cp -a /tmp/liv_lib_backup lib
+
           cp /tmp/liv_pubspec_backup pubspec.yaml
+
           if [ -d /tmp/liv_assets_backup/assets ]; then
             rm -rf assets
             cp -a /tmp/liv_assets_backup/assets assets
           fi
-          grep -q "LivApp" lib/main.dart || (echo "FATAL: main overwritten" && exit 1)
+
+          grep -q "LivApp" lib/main.dart || (
+            echo "FATAL: main overwritten"
+            exit 1
+          )
 
       - name: Patch Gaps + Gemini
         run: |
           python3 << 'PY'
           from pathlib import Path
-          import re, textwrap
+          import re
+          import textwrap
+
           common = Path("lib/widgets/common.dart")
           theme = Path("lib/theme/app_theme.dart")
+
           if theme.exists():
               t = theme.read_text(encoding="utf-8")
+
               if "class Gaps" in t:
-                  theme.write_text(re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n", t), encoding="utf-8")
+                  theme.write_text(
+                      re.sub(
+                          r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*",
+                          "\n",
+                          t
+                      ),
+                      encoding="utf-8"
+                  )
+
           COMPLETE_GAPS = """
           class Gaps {
             static const h4 = SizedBox(height: 4);
@@ -134,28 +193,60 @@ jobs:
             static const w16 = SizedBox(width: 16);
           }
           """
+
           if common.exists():
               t = common.read_text(encoding="utf-8")
+
               if "class Gaps" in t:
-                  t = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n", t)
+                  t = re.sub(
+                      r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*",
+                      "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n",
+                      t
+                  )
               else:
-                  t = t.rstrip() + "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n"
-              common.write_text(t.rstrip() + "\n", encoding="utf-8")
+                  t = (
+                      t.rstrip()
+                      + "\n"
+                      + textwrap.dedent(COMPLETE_GAPS).strip()
+                      + "\n"
+                  )
+
+              common.write_text(
+                  t.rstrip() + "\n",
+                  encoding="utf-8"
+              )
+
               print("Gaps OK")
+
           gs = Path("lib/services/gemini_service.dart")
+
           if gs.exists():
               g = gs.read_text(encoding="utf-8")
+
               if "personalityInsight" not in g:
-                  method = "\n  Future<String> personalityInsight({required String profileSummary}) {\n    return Future.value('Keep growing with LIV!');\n  }\n"
+                  method = """
+            Future<String> personalityInsight({
+              required String profileSummary
+            }) {
+              return Future.value('Keep growing with LIV!');
+            }
+          """
+
                   idx = g.rfind("}")
+
                   if idx != -1:
-                      gs.write_text(g[:idx] + method + g[idx:], encoding="utf-8")
+                      gs.write_text(
+                          g[:idx] + method + g[idx:],
+                          encoding="utf-8"
+                      )
           PY
 
       - name: Force compileSdk 35
         run: |
           for f in android/app/build.gradle android/app/build.gradle.kts; do
-            [ -f "$f" ] && sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" || true
+            [ -f "$f" ] && \
+            sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" \
+            || true
           done
 
       - name: Enable Internet permission + label
@@ -163,16 +254,46 @@ jobs:
           python3 << 'PY'
           from pathlib import Path
           import re
-          p = Path("android/app/src/main/AndroidManifest.xml")
+
+          p = Path(
+              "android/app/src/main/AndroidManifest.xml"
+          )
+
           if not p.exists():
               raise SystemExit(0)
-          text = p.read_text(encoding="utf-8")
-          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+
+          text = p.read_text(
+              encoding="utf-8"
+          )
+
+          permission = (
+              '<uses-permission '
+              'android:name="android.permission.INTERNET"/>'
+          )
+
           if permission not in text:
-              text = re.sub(r'(<manifest[^>]*>)', r'\1\n    ' + permission, text, count=1)
-          text = re.sub(r'android:label="[^"]*"', 'android:label="LIV"', text, count=1)
-          p.write_text(text, encoding="utf-8")
-          print("Permissions + label OK")
+              text = re.sub(
+                  r'(<manifest[^>]*>)',
+                  r'\1\n    ' + permission,
+                  text,
+                  count=1
+              )
+
+          text = re.sub(
+              r'android:label="[^"]*"',
+              'android:label="LIV"',
+              text,
+              count=1
+          )
+
+          p.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print(
+              "Permissions + label OK"
+          )
           PY
 
       - name: Add VIBRATE permission
@@ -180,28 +301,133 @@ jobs:
           if [ -f android/app/src/main/AndroidManifest.xml ] && ! grep -q VIBRATE android/app/src/main/AndroidManifest.xml; then
             sed -i 's|android.permission.INTERNET"/>|android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>|' android/app/src/main/AndroidManifest.xml || true
           fi
-          grep -E "INTERNET|VIBRATE" android/app/src/main/AndroidManifest.xml || true
+
+          grep -E "INTERNET|VIBRATE" \
+            android/app/src/main/AndroidManifest.xml \
+            || true
+
+      # =====================================================
+      # NATIVE PICKER SOUND + HAPTIC
+      # =====================================================
+
+      - name: Install native picker sound + haptic
+        run: |
+          set -e
+
+          echo "========================================"
+          echo "Installing LIV native picker feedback"
+          echo "========================================"
+
+          test -f ci/feedback_patch.py || (
+            echo "ERROR: ci/feedback_patch.py not found"
+            exit 1
+          )
+
+          python3 ci/feedback_patch.py
+
+          echo "Checking generated picker sound..."
+
+          test -f android/app/src/main/res/raw/liv_picker_tick.wav || (
+            echo "ERROR: liv_picker_tick.wav was not generated"
+            exit 1
+          )
+
+          echo "Checking native MethodChannel..."
+
+          grep -R "liv.feedback" \
+            android/app/src/main/kotlin \
+            >/dev/null || (
+              echo "ERROR: liv.feedback MethodChannel missing"
+              exit 1
+            )
+
+          echo "Checking SoundPool..."
+
+          grep -R "SoundPool" \
+            android/app/src/main/kotlin \
+            >/dev/null || (
+              echo "ERROR: SoundPool missing"
+              exit 1
+            )
+
+          echo "Checking native haptic..."
+
+          grep -R "EFFECT_TICK" \
+            android/app/src/main/kotlin \
+            >/dev/null || (
+              echo "ERROR: EFFECT_TICK missing"
+              exit 1
+            )
+
+          echo "Checking VIBRATE permission..."
+
+          grep -q "android.permission.VIBRATE" \
+            android/app/src/main/AndroidManifest.xml || (
+              echo "ERROR: VIBRATE permission missing"
+              exit 1
+            )
+
+          echo "========================================"
+          echo "LIV native feedback installed successfully"
+          echo "========================================"
 
       - name: Bump Kotlin AGP Gradle
         run: |
           if [ -f android/settings.gradle ]; then
-            sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' android/settings.gradle || true
-            sed -i -E 's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' android/settings.gradle || true
+            sed -i -E \
+              's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' \
+              android/settings.gradle || true
+
+            sed -i -E \
+              's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' \
+              android/settings.gradle || true
           fi
+
           if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
-            sed -i -E 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' android/gradle/wrapper/gradle-wrapper.properties || true
+            sed -i -E \
+              's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' \
+              android/gradle/wrapper/gradle-wrapper.properties || true
           fi
 
       - name: Setup fixed release signing
         run: |
           set -e
+
           mkdir -p android/app
-          if [ -f ci/ks.b64 ]; then base64 -d ci/ks.b64 > android/app/liv-release.keystore; fi
-          ls -la android/app/liv-release.keystore || true
-          printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
-          if [ -f ci/sign.b64 ]; then base64 -d ci/sign.b64 > /tmp/sign.py && python3 /tmp/sign.py; fi
-          sed -i -E "s/^version:.*/version: 1.4.3+12/" pubspec.yaml 2>/dev/null || true
-          grep "^version:" pubspec.yaml || true
+
+          if [ -f ci/ks.b64 ]; then
+            base64 -d ci/ks.b64 \
+              > android/app/liv-release.keystore
+          fi
+
+          ls -la \
+            android/app/liv-release.keystore \
+            || true
+
+          printf '%s\n' \
+            'storePassword=liv2026secure' \
+            'keyPassword=liv2026secure' \
+            'keyAlias=liv' \
+            'storeFile=liv-release.keystore' \
+            > android/key.properties
+
+          if [ -f ci/sign.b64 ]; then
+            base64 -d ci/sign.b64 \
+              > /tmp/sign.py
+
+            python3 /tmp/sign.py
+          fi
+
+          sed -i -E \
+            "s/^version:.*/version: 1.4.3+12/" \
+            pubspec.yaml \
+            2>/dev/null \
+            || true
+
+          grep "^version:" \
+            pubspec.yaml \
+            || true
+
           echo "Fixed signing ready"
 
       - name: Get dependencies
