@@ -30,57 +30,75 @@ jobs:
       - name: Prepare project files (restore full Liv sources)
         run: |
           set -e
+
           echo "Downloading full Liv sources..."
-          curl -L -o /tmp/liv_app_full.zip "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
+
+          curl -L -o /tmp/liv_app_full.zip \
+            "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
+
           rm -rf /tmp/liv_extract
           mkdir -p /tmp/liv_extract
+
           unzip -o /tmp/liv_app_full.zip -d /tmp/liv_extract
 
           if [ -f lib/screens/onboarding_screen.dart ]; then
             cp lib/screens/onboarding_screen.dart /tmp/onboarding_committed.dart
-            echo "Saved committed onboarding (source of truth)"
+            echo "Saved committed onboarding source"
             wc -l /tmp/onboarding_committed.dart
           fi
 
           if [ -d /tmp/liv_extract/lib ]; then
             rm -rf lib
             cp -a /tmp/liv_extract/lib .
-            echo "Restored full lib/ from zip"
+            echo "Restored full lib/ from ZIP"
 
             mkdir -p lib/screens
 
-            if [ -f /tmp/onboarding_committed.dart ] && ! grep -qE "Onboarding loading|^TEMP$" /tmp/onboarding_committed.dart 2>/dev/null; then
-              cp /tmp/onboarding_committed.dart lib/screens/onboarding_screen.dart
-              echo "Restored onboarding from committed source of truth"
+            if [ -f /tmp/onboarding_committed.dart ] && \
+               ! grep -qE "Onboarding loading|^TEMP$" \
+               /tmp/onboarding_committed.dart 2>/dev/null; then
+
+              cp /tmp/onboarding_committed.dart \
+                lib/screens/onboarding_screen.dart
+
+              echo "Restored onboarding from committed source"
+
             else
-              echo "Committed onboarding is TEMP/stub — using full source from 6116049"
+
+              echo "Using known-good onboarding source"
 
               curl -fsSL \
                 -o lib/screens/onboarding_screen.dart \
                 "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
+
             fi
 
             if [ -f ci/ux_period_patch.py ]; then
               python3 ci/ux_period_patch.py
               echo "Applied UX period + colors + age patch"
+
             elif [ -f ci/age_patch.b64 ]; then
+
               base64 -d ci/age_patch.b64 > /tmp/age_patch.py
               python3 /tmp/age_patch.py
+
               echo "Applied age picker patch"
             fi
 
             if [ -f ci/period_nav_patch.py ]; then
               python3 ci/period_nav_patch.py
-              echo "Applied period bottom nav + PeriodScreen"
+              echo "Applied period navigation patch"
             fi
 
-            grep -q "_periodSection\|_trackPeriod\|_tickAgeItem\|useMagnifier" lib/screens/onboarding_screen.dart \
+            grep -q "_periodSection\|_trackPeriod\|_tickAgeItem\|useMagnifier" \
+              lib/screens/onboarding_screen.dart \
               && echo "UX markers OK" \
               || echo "WARNING: UX markers missing"
 
-            grep -q "PeriodScreen\|showPeriod\|water_drop_rounded" lib/screens/root_shell.dart \
-              && echo "Period nav OK" \
-              || echo "WARNING: Period nav missing"
+            grep -q "PeriodScreen\|showPeriod\|water_drop_rounded" \
+              lib/screens/root_shell.dart \
+              && echo "Period navigation OK" \
+              || echo "WARNING: Period navigation missing"
 
             test -f lib/screens/period_screen.dart \
               && echo "period_screen.dart present" \
@@ -106,7 +124,7 @@ jobs:
           )
 
           test -f lib/main.dart || (
-            echo "ERROR: main missing"
+            echo "ERROR: main.dart missing"
             exit 1
           )
 
@@ -117,15 +135,21 @@ jobs:
 
           echo "Project files OK"
 
+
       - name: Backup Dart sources before flutter create
         run: |
-          rm -rf /tmp/liv_lib_backup /tmp/liv_pubspec_backup
+          set -e
+
+          rm -rf /tmp/liv_lib_backup
+          rm -rf /tmp/liv_pubspec_backup
 
           cp -a lib /tmp/liv_lib_backup
           cp pubspec.yaml /tmp/liv_pubspec_backup
 
           mkdir -p /tmp/liv_assets_backup
+
           cp -a assets /tmp/liv_assets_backup/ 2>/dev/null || true
+
 
       - name: Scaffold native Android only
         run: |
@@ -137,6 +161,7 @@ jobs:
             --project-name liv_app . || true
 
           rm -rf lib
+
           cp -a /tmp/liv_lib_backup lib
 
           cp /tmp/liv_pubspec_backup pubspec.yaml
@@ -147,9 +172,10 @@ jobs:
           fi
 
           grep -q "LivApp" lib/main.dart || (
-            echo "FATAL: main overwritten"
+            echo "FATAL: main.dart was overwritten"
             exit 1
           )
+
 
       - name: Patch Gaps + Gemini
         run: |
@@ -200,7 +226,9 @@ jobs:
               if "class Gaps" in t:
                   t = re.sub(
                       r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*",
-                      "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n",
+                      "\n" +
+                      textwrap.dedent(COMPLETE_GAPS).strip() +
+                      "\n",
                       t
                   )
               else:
@@ -239,15 +267,36 @@ jobs:
                           g[:idx] + method + g[idx:],
                           encoding="utf-8"
                       )
+
           PY
+
 
       - name: Force compileSdk 35
         run: |
-          for f in android/app/build.gradle android/app/build.gradle.kts; do
-            [ -f "$f" ] && \
-            sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" \
-            || true
+          set -e
+
+          for f in \
+            android/app/build.gradle \
+            android/app/build.gradle.kts
+          do
+            if [ -f "$f" ]; then
+              sed -i -E \
+                's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' \
+                "$f" || true
+
+              sed -i -E \
+                's/compileSdk\s+[0-9]+/compileSdk 35/' \
+                "$f" || true
+            fi
           done
+
+          echo "Checking compileSdk..."
+
+          grep -R \
+            -E "compileSdk(Version)?[ =]+35" \
+            android/app \
+            || true
+
 
       - name: Enable Internet permission + label
         run: |
@@ -260,7 +309,9 @@ jobs:
           )
 
           if not p.exists():
-              raise SystemExit(0)
+              raise SystemExit(
+                  "AndroidManifest.xml not found"
+              )
 
           text = p.read_text(
               encoding="utf-8"
@@ -292,88 +343,49 @@ jobs:
           )
 
           print(
-              "Permissions + label OK"
+              "Internet permission + label OK"
           )
           PY
 
+
       - name: Add VIBRATE permission
-        run: |
-          if [ -f android/app/src/main/AndroidManifest.xml ] && ! grep -q VIBRATE android/app/src/main/AndroidManifest.xml; then
-            sed -i 's|android.permission.INTERNET"/>|android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>|' android/app/src/main/AndroidManifest.xml || true
-          fi
-
-          grep -E "INTERNET|VIBRATE" \
-            android/app/src/main/AndroidManifest.xml \
-            || true
-
-      # =====================================================
-      # NATIVE PICKER SOUND + HAPTIC
-      # =====================================================
-
-      - name: Install native picker sound + haptic
         run: |
           set -e
 
-          echo "========================================"
-          echo "Installing LIV native picker feedback"
-          echo "========================================"
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
 
-          test -f ci/feedback_patch.py || (
-            echo "ERROR: ci/feedback_patch.py not found"
+          test -f "$MANIFEST" || (
+            echo "ERROR: AndroidManifest.xml missing"
             exit 1
           )
 
-          python3 ci/feedback_patch.py
+          if ! grep -q \
+            'android.permission.VIBRATE' \
+            "$MANIFEST"
+          then
 
-          echo "Checking generated picker sound..."
+            sed -i \
+              's|</manifest>|    <uses-permission android:name="android.permission.VIBRATE"/>\n</manifest>|' \
+              "$MANIFEST"
 
-          test -f android/app/src/main/res/raw/liv_picker_tick.wav || (
-            echo "ERROR: liv_picker_tick.wav was not generated"
-            exit 1
-          )
+          fi
 
-          echo "Checking native MethodChannel..."
-
-          grep -R "liv.feedback" \
-            android/app/src/main/kotlin \
-            >/dev/null || (
-              echo "ERROR: liv.feedback MethodChannel missing"
+          grep -q \
+            'android.permission.VIBRATE' \
+            "$MANIFEST" || (
+              echo "ERROR: VIBRATE permission was not added"
               exit 1
             )
 
-          echo "Checking SoundPool..."
+          echo "VIBRATE permission OK"
 
-          grep -R "SoundPool" \
-            android/app/src/main/kotlin \
-            >/dev/null || (
-              echo "ERROR: SoundPool missing"
-              exit 1
-            )
-
-          echo "Checking native haptic..."
-
-          grep -R "EFFECT_TICK" \
-            android/app/src/main/kotlin \
-            >/dev/null || (
-              echo "ERROR: EFFECT_TICK missing"
-              exit 1
-            )
-
-          echo "Checking VIBRATE permission..."
-
-          grep -q "android.permission.VIBRATE" \
-            android/app/src/main/AndroidManifest.xml || (
-              echo "ERROR: VIBRATE permission missing"
-              exit 1
-            )
-
-          echo "========================================"
-          echo "LIV native feedback installed successfully"
-          echo "========================================"
 
       - name: Bump Kotlin AGP Gradle
         run: |
+          set -e
+
           if [ -f android/settings.gradle ]; then
+
             sed -i -E \
               's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\12.1.0\2/' \
               android/settings.gradle || true
@@ -381,13 +393,17 @@ jobs:
             sed -i -E \
               's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' \
               android/settings.gradle || true
+
           fi
 
           if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+
             sed -i -E \
               's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' \
               android/gradle/wrapper/gradle-wrapper.properties || true
+
           fi
+
 
       - name: Setup fixed release signing
         run: |
@@ -401,8 +417,7 @@ jobs:
           fi
 
           ls -la \
-            android/app/liv-release.keystore \
-            || true
+            android/app/liv-release.keystore || true
 
           printf '%s\n' \
             'storePassword=liv2026secure' \
@@ -419,25 +434,335 @@ jobs:
           fi
 
           sed -i -E \
-            "s/^version:.*/version: 1.4.3+12/" \
-            pubspec.yaml \
-            2>/dev/null \
-            || true
+            's/^version:.*/version: 1.4.3+12/' \
+            pubspec.yaml 2>/dev/null || true
 
-          grep "^version:" \
-            pubspec.yaml \
-            || true
+          grep "^version:" pubspec.yaml || true
 
           echo "Fixed signing ready"
 
+
       - name: Get dependencies
-        run: flutter pub get
+        run: |
+          set -e
+          flutter pub get
+
 
       - name: Generate app icon
-        run: dart run flutter_launcher_icons || true
+        run: |
+          dart run flutter_launcher_icons || true
+
+
+      # ======================================================
+      # CRITICAL FEEDBACK PATCH
+      # ======================================================
+
+      - name: Install native picker feedback
+        run: |
+          set -e
+
+          test -f ci/feedback_patch.py || (
+            echo "ERROR: ci/feedback_patch.py missing"
+            exit 1
+          )
+
+          python3 ci/feedback_patch.py
+
+
+      # ======================================================
+      # HARD VERIFICATION
+      # Nothing below this point can run if feedback is broken.
+      # ======================================================
+
+      - name: Verify feedback wiring
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "VERIFYING LIV PICKER FEEDBACK"
+          echo "=========================================="
+
+          ONBOARDING="lib/screens/onboarding_screen.dart"
+          AUDIO="lib/services/audio_service.dart"
+          MAIN_ACTIVITY=$(find android/app/src/main/kotlin -name MainActivity.kt | head -n 1)
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          WAV="android/app/src/main/res/raw/liv_picker_tick.wav"
+
+          echo ""
+          echo "1. Checking onboarding..."
+
+          test -f "$ONBOARDING" || (
+            echo "ERROR: onboarding_screen.dart missing"
+            exit 1
+          )
+
+          grep -q \
+            "AudioService.instance.tick();" \
+            "$ONBOARDING" || (
+              echo "ERROR: onboarding does not call AudioService.instance.tick()"
+              exit 1
+            )
+
+          grep -q \
+            "_tickAgeItem();" \
+            "$ONBOARDING" || (
+              echo "ERROR: Age Picker does not call _tickAgeItem()"
+              exit 1
+            )
+
+          grep -q \
+            "onSelectedItemChanged" \
+            "$ONBOARDING" || (
+              echo "ERROR: Age Picker callback missing"
+              exit 1
+            )
+
+          echo "OK - onboarding feedback wiring"
+
+
+          echo ""
+          echo "2. Checking AudioService..."
+
+          test -f "$AUDIO" || (
+            echo "ERROR: audio_service.dart missing"
+            exit 1
+          )
+
+          grep -q \
+            "liv.feedback" \
+            "$AUDIO" || (
+              echo "ERROR: liv.feedback channel missing"
+              exit 1
+            )
+
+          grep -q \
+            "invokeMethod<void>('tick')" \
+            "$AUDIO" || (
+              echo "ERROR: AudioService tick() missing"
+              exit 1
+            )
+
+          echo "OK - AudioService"
+
+
+          echo ""
+          echo "3. Checking MainActivity..."
+
+          test -n "$MAIN_ACTIVITY" || (
+            echo "ERROR: MainActivity.kt missing"
+            exit 1
+          )
+
+          echo "MainActivity: $MAIN_ACTIVITY"
+
+          grep -q \
+            'CHANNEL = "liv.feedback"' \
+            "$MAIN_ACTIVITY" || (
+              echo "ERROR: native channel missing"
+              exit 1
+            )
+
+          grep -q \
+            'setMethodCallHandler' \
+            "$MAIN_ACTIVITY" || (
+              echo "ERROR: MethodChannel handler missing"
+              exit 1
+            )
+
+          grep -q \
+            '"tick" ->' \
+            "$MAIN_ACTIVITY" || (
+              echo "ERROR: native tick handler missing"
+              exit 1
+            )
+
+          grep -q \
+            'SoundPool' \
+            "$MAIN_ACTIVITY" || (
+              echo "ERROR: SoundPool missing"
+              exit 1
+            )
+
+          grep -q \
+            'R.raw.liv_picker_tick' \
+            "$MAIN_ACTIVITY" || (
+              echo "ERROR: picker WAV is not loaded"
+              exit 1
+            )
+
+          grep -q \
+            'VibrationEffect.EFFECT_TICK' \
+            "$MAIN_ACTIVITY" || (
+              echo "ERROR: EFFECT_TICK missing"
+              exit 1
+            )
+
+          echo "OK - native sound + haptic"
+
+
+          echo ""
+          echo "4. Checking WAV..."
+
+          test -f "$WAV" || (
+            echo "ERROR: picker WAV missing"
+            exit 1
+          )
+
+          file "$WAV"
+
+          echo "OK - picker WAV exists"
+
+
+          echo ""
+          echo "5. Checking VIBRATE permission..."
+
+          grep -q \
+            'android.permission.VIBRATE' \
+            "$MANIFEST" || (
+              echo "ERROR: VIBRATE permission missing"
+              exit 1
+            )
+
+          echo "OK - VIBRATE permission"
+
+
+          echo ""
+          echo "6. Checking feedback channel consistency..."
+
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+
+          audio = Path(
+              "lib/services/audio_service.dart"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          main_files = list(
+              Path(
+                  "android/app/src/main/kotlin"
+              ).rglob("MainActivity.kt")
+          )
+
+          if not main_files:
+              raise SystemExit(
+                  "ERROR: MainActivity.kt not found"
+              )
+
+          main = main_files[0].read_text(
+              encoding="utf-8"
+          )
+
+          dart_channel = re.search(
+              r"MethodChannel\(['\"]([^'\"]+)['\"]\)",
+              audio
+          )
+
+          kotlin_channel = re.search(
+              r'CHANNEL\s*=\s*"([^"]+)"',
+              main
+          )
+
+          if not dart_channel:
+              raise SystemExit(
+                  "ERROR: Could not read Dart channel"
+              )
+
+          if not kotlin_channel:
+              raise SystemExit(
+                  "ERROR: Could not read Kotlin channel"
+              )
+
+          if (
+              dart_channel.group(1)
+              != kotlin_channel.group(1)
+          ):
+              raise SystemExit(
+                  "ERROR: Dart/Kotlin channel mismatch: "
+                  + dart_channel.group(1)
+                  + " != "
+                  + kotlin_channel.group(1)
+              )
+
+          if dart_channel.group(1) != "liv.feedback":
+              raise SystemExit(
+                  "ERROR: Unexpected feedback channel"
+              )
+
+          print(
+              "OK - Dart/Kotlin MethodChannel match: "
+              + dart_channel.group(1)
+          )
+          PY
+
+
+          echo ""
+          echo "=========================================="
+          echo "ALL FEEDBACK CHECKS PASSED"
+          echo "=========================================="
+
+
+      # ======================================================
+      # Analyze AFTER every source patch
+      # ======================================================
+
+      - name: Flutter analyze
+        run: |
+          set -e
+
+          echo "Running Flutter analyzer..."
+
+          flutter analyze
+
+          echo "Flutter analyze PASSED"
+
+
+      # ======================================================
+      # Compile Android debug APK as an additional check
+      # ======================================================
+
+      - name: Android debug compile verification
+        run: |
+          set -e
+
+          echo "Compiling Android debug APK..."
+
+          flutter build apk \
+            --debug \
+            --no-pub
+
+          echo "Android debug compilation PASSED"
+
+
+      # ======================================================
+      # Final release APK
+      # ======================================================
 
       - name: Build APK (Release)
-        run: flutter build apk --release
+        run: |
+          set -e
+
+          flutter build apk \
+            --release \
+            --no-pub
+
+
+      - name: Verify release APK exists
+        run: |
+          set -e
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          test -f "$APK" || (
+            echo "ERROR: Release APK was not generated"
+            exit 1
+          )
+
+          ls -lh "$APK"
+
+          echo "Release APK verified"
+
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
