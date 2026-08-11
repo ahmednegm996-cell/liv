@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ------------------------------------------------------
-      # JAVA
+      # JAVA 17
       # ------------------------------------------------------
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -40,31 +40,28 @@ jobs:
           cache: true
 
       # ------------------------------------------------------
-      # VERIFY SOURCE TREE
+      # VERIFY SOURCE
       # ------------------------------------------------------
-      - name: Verify repository sources
+      - name: Verify repository
         run: |
           set -e
 
-          echo "Checking repository sources..."
+          echo "Flutter version:"
+          flutter --version
+
+          echo "Checking project..."
 
           test -f pubspec.yaml
           test -f lib/main.dart
           test -d lib
 
-          echo "Repository source tree:"
-          find lib -maxdepth 3 -type f | sort
+          echo "Dart files:"
+          find lib -maxdepth 4 -type f | sort
 
-          echo "Source verification passed."
+          echo "Repository verification passed."
 
       # ------------------------------------------------------
       # CREATE ANDROID PROJECT
-      # ------------------------------------------------------
-      # The repository does not currently contain the generated
-      # Android project, so Flutter creates it here.
-      #
-      # IMPORTANT:
-      # This does NOT replace lib/.
       # ------------------------------------------------------
       - name: Create Android project
         run: |
@@ -76,48 +73,152 @@ jobs:
             --project-name liv_app \
             .
 
-          echo "Android project created."
+          echo "Android project generated."
+
+          test -d android
+          test -f android/app/build.gradle
+          test -f android/build.gradle
+          test -f android/settings.gradle
 
       # ------------------------------------------------------
-      # VERIFY SOURCES WERE NOT OVERWRITTEN
+      # SHOW GENERATED ANDROID FILES
       # ------------------------------------------------------
-      - name: Verify Dart sources after flutter create
+      - name: Inspect Android project
         run: |
           set -e
 
-          test -f lib/main.dart
+          echo "Android files:"
+          find android -maxdepth 4 -type f | sort
 
-          grep -q "LivApp" lib/main.dart
+          echo ""
+          echo "android/settings.gradle:"
+          cat android/settings.gradle
 
-          echo "Dart sources are still present."
+          echo ""
+          echo "android/build.gradle:"
+          cat android/build.gradle
+
+          echo ""
+          echo "android/app/build.gradle:"
+          cat android/app/build.gradle
 
       # ------------------------------------------------------
-      # ANDROID COMPILE SDK
+      # FIX KOTLIN VERSION
       # ------------------------------------------------------
-      - name: Configure Android compile SDK
+      - name: Configure Kotlin
         run: |
           set -e
 
-          if [ -f android/app/build.gradle ]; then
-            sed -i -E \
-              's/compileSdk[[:space:]]+[0-9]+/compileSdk 35/g' \
-              android/app/build.gradle || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
 
-            sed -i -E \
-              's/compileSdk[[:space:]]*=[[:space:]]*[0-9]+/compileSdk = 35/g' \
-              android/app/build.gradle || true
-          fi
+          # -----------------------------------------------
+          # android/settings.gradle
+          # -----------------------------------------------
+          settings = Path("android/settings.gradle")
 
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i -E \
-              's/compileSdk[[:space:]]*=[[:space:]]*[0-9]+/compileSdk = 35/g' \
-              android/app/build.gradle.kts || true
-          fi
+          if settings.exists():
+              text = settings.read_text(encoding="utf-8")
 
-          echo "Android compile SDK configuration completed."
+              # Flutter 3.24 generated projects normally contain:
+              #
+              # id "org.jetbrains.kotlin.android" version "1.9.0"
+              #
+              # Upgrade it to Kotlin 1.9.22.
+              text = re.sub(
+                  r'(id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'])[^"\']+(["\'])',
+                  r'\g<1>1.9.22\g<2>',
+                  text
+              )
+
+              settings.write_text(text, encoding="utf-8")
+
+          # -----------------------------------------------
+          # android/build.gradle
+          # -----------------------------------------------
+          build = Path("android/build.gradle")
+
+          if build.exists():
+              text = build.read_text(encoding="utf-8")
+
+              # Old Flutter projects may use:
+              #
+              # ext.kotlin_version = '...'
+              #
+              text = re.sub(
+                  r"(kotlin_version\s*=\s*['\"])[^'\"]+(['\"])",
+                  r"\g<1>1.9.22\g<2>",
+                  text
+              )
+
+              build.write_text(text, encoding="utf-8")
+
+          print("Kotlin configuration updated.")
+          PY
+
+          echo ""
+          echo "Kotlin configuration after update:"
+          grep -Rni "kotlin" android/settings.gradle android/build.gradle || true
 
       # ------------------------------------------------------
-      # INTERNET PERMISSION
+      # FIX ANDROID COMPILE SDK
+      # ------------------------------------------------------
+      - name: Configure Android SDK
+        run: |
+          set -e
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          files = [
+              Path("android/app/build.gradle"),
+              Path("android/app/build.gradle.kts"),
+          ]
+
+          for path in files:
+              if not path.exists():
+                  continue
+
+              text = path.read_text(encoding="utf-8")
+
+              # Groovy:
+              # compileSdk flutter.compileSdkVersion
+              #
+              # Kotlin DSL:
+              # compileSdk = flutter.compileSdkVersion
+              text = re.sub(
+                  r'compileSdk\s+flutter\.compileSdkVersion',
+                  'compileSdk 35',
+                  text
+              )
+
+              text = re.sub(
+                  r'compileSdk\s*=\s*flutter\.compileSdkVersion',
+                  'compileSdk = 35',
+                  text
+              )
+
+              text = re.sub(
+                  r'compileSdk\s+[0-9]+',
+                  'compileSdk 35',
+                  text
+              )
+
+              text = re.sub(
+                  r'compileSdk\s*=\s*[0-9]+',
+                  'compileSdk = 35',
+                  text
+              )
+
+              path.write_text(text, encoding="utf-8")
+
+          print("Compile SDK configured.")
+          PY
+
+      # ------------------------------------------------------
+      # INTERNET + VIBRATE PERMISSIONS
       # ------------------------------------------------------
       - name: Configure Android permissions
         run: |
@@ -133,40 +234,71 @@ jobs:
           path = Path("android/app/src/main/AndroidManifest.xml")
           text = path.read_text(encoding="utf-8")
 
-          internet = '<uses-permission android:name="android.permission.INTERNET"/>'
-          vibrate = '<uses-permission android:name="android.permission.VIBRATE"/>'
+          permissions = [
+              '<uses-permission android:name="android.permission.INTERNET"/>',
+              '<uses-permission android:name="android.permission.VIBRATE"/>',
+          ]
 
-          if internet not in text:
-              text = text.replace(
-                  "<manifest",
-                  "<manifest",
-                  1
+          manifest_end = text.find(">")
+
+          if manifest_end == -1:
+              raise RuntimeError("Invalid AndroidManifest.xml")
+
+          insertion = ""
+
+          for permission in permissions:
+              if permission not in text:
+                  insertion += "\n    " + permission
+
+          if insertion:
+              insertion += "\n"
+              text = (
+                  text[:manifest_end + 1]
+                  + insertion
+                  + text[manifest_end + 1:]
               )
-              marker = text.find(">")
-              if marker != -1:
-                  text = text[:marker + 1] + "\n    " + internet + "\n" + text[marker + 1:]
 
-          if vibrate not in text:
-              marker = text.find(">")
-              if marker != -1:
-                  text = text[:marker + 1] + "\n    " + vibrate + "\n" + text[marker + 1:]
-
+          # App name
           text = text.replace(
               'android:label="liv_app"',
               'android:label="LIV"'
           )
 
           path.write_text(text, encoding="utf-8")
+
           print("Android permissions configured.")
           PY
 
+          echo ""
+          echo "AndroidManifest.xml:"
+          cat "$MANIFEST"
+
       # ------------------------------------------------------
-      # DEPENDENCIES
+      # GET DEPENDENCIES
       # ------------------------------------------------------
       - name: Get dependencies
         run: |
           set -e
+
+          flutter clean
           flutter pub get
+
+      # ------------------------------------------------------
+      # VERIFY KOTLIN DEPENDENCY
+      # ------------------------------------------------------
+      - name: Verify Kotlin dependencies
+        run: |
+          set -e
+
+          echo "Flutter pub deps:"
+          flutter pub deps
+
+          echo ""
+          echo "Gradle Kotlin files:"
+          find "$HOME/.gradle/caches" \
+            -iname "*kotlin*1.9.22*" \
+            -o -iname "*kotlin-stdlib*" \
+            | head -50 || true
 
       # ------------------------------------------------------
       # ANALYZE
@@ -185,7 +317,7 @@ jobs:
 
           if [ "$EXIT_CODE" -ne 0 ]; then
             echo "Flutter analyze found issues."
-            echo "Build will continue so we can inspect the actual errors."
+            echo "Continuing to Android compilation."
           else
             echo "Flutter analyze passed."
           fi
@@ -193,7 +325,7 @@ jobs:
           exit 0
 
       # ------------------------------------------------------
-      # DEBUG BUILD
+      # DEBUG APK
       # ------------------------------------------------------
       - name: Build debug APK
         run: |
@@ -205,10 +337,10 @@ jobs:
 
           test -f build/app/outputs/flutter-apk/app-debug.apk
 
-          echo "Debug APK build passed."
+          echo "Debug APK built successfully."
 
       # ------------------------------------------------------
-      # RELEASE BUILD
+      # RELEASE APK
       # ------------------------------------------------------
       - name: Build release APK
         run: |
@@ -218,10 +350,14 @@ jobs:
             --release \
             --no-pub
 
+          test -f build/app/outputs/flutter-apk/app-release.apk
+
+          echo "Release APK built successfully."
+
       # ------------------------------------------------------
-      # VERIFY RELEASE APK
+      # SHOW APK
       # ------------------------------------------------------
-      - name: Verify release APK
+      - name: Verify APK
         run: |
           set -e
 
@@ -229,13 +365,11 @@ jobs:
 
           test -f "$APK"
 
-          echo "Release APK:"
+          echo "APK:"
           ls -lh "$APK"
 
-          echo "Release APK verified."
-
       # ------------------------------------------------------
-      # UPLOAD APK
+      # UPLOAD RELEASE APK
       # ------------------------------------------------------
       - name: Upload APK
         uses: actions/upload-artifact@v4
