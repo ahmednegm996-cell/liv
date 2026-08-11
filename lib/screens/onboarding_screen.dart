@@ -69,13 +69,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   });
                 },
                 children: [
-                  _buildWelcomePage(t),
-                  _buildNamePage(t),
-                  _buildGoalsPage(t),
+                  _buildWelcomePage(),
+                  _buildNamePage(),
+                  _buildGoalsPage(),
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               child: Row(
@@ -83,17 +82,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   if (_currentPage > 0)
                     TextButton(
                       onPressed: _previousPage,
-                      child: Text(t.back),
+                      child: Text(
+                        t.home == 'الرئيسية' ? 'رجوع' : 'Back',
+                      ),
                     )
                   else
                     const SizedBox(width: 80),
-
                   const Spacer(),
-
                   FilledButton(
                     onPressed: () => _nextPage(state),
                     child: Text(
-                      _currentPage < 2 ? t.next : t.start,
+                      _currentPage < 2
+                          ? t.next
+                          : (t.home == 'الرئيسية' ? 'ابدأ' : 'Start'),
                     ),
                   ),
                 ],
@@ -105,7 +106,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildWelcomePage(L10n t) {
+  Widget _buildWelcomePage() {
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -138,6 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'A simple space to organize your life, build better habits, and work toward your dreams.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -145,7 +147,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildNamePage(L10n t) {
+  Widget _buildNamePage() {
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -171,6 +173,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'Tell LIV your name so your experience feels more personal.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
             TextField(
@@ -190,7 +193,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildGoalsPage(L10n t) {
+  Widget _buildGoalsPage() {
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -215,6 +218,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'Track your habits, dreams, progress, and daily activities in one place.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
             Card(
