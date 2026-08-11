@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # ------------------------------------------------------
       # CHECKOUT
       # ------------------------------------------------------
@@ -49,15 +50,18 @@ jobs:
           echo "Flutter version:"
           flutter --version
 
+          echo ""
           echo "Checking project..."
 
           test -f pubspec.yaml
           test -f lib/main.dart
           test -d lib
 
+          echo ""
           echo "Dart files:"
           find lib -maxdepth 4 -type f | sort
 
+          echo ""
           echo "Repository verification passed."
 
       # ------------------------------------------------------
@@ -81,7 +85,7 @@ jobs:
           test -f android/settings.gradle
 
       # ------------------------------------------------------
-      # SHOW GENERATED ANDROID FILES
+      # INSPECT ANDROID PROJECT
       # ------------------------------------------------------
       - name: Inspect Android project
         run: |
@@ -103,7 +107,7 @@ jobs:
           cat android/app/build.gradle
 
       # ------------------------------------------------------
-      # FIX KOTLIN VERSION
+      # CONFIGURE KOTLIN
       # ------------------------------------------------------
       - name: Configure Kotlin
         run: |
@@ -121,11 +125,6 @@ jobs:
           if settings.exists():
               text = settings.read_text(encoding="utf-8")
 
-              # Flutter 3.24 generated projects normally contain:
-              #
-              # id "org.jetbrains.kotlin.android" version "1.9.0"
-              #
-              # Upgrade it to Kotlin 1.9.22.
               text = re.sub(
                   r'(id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'])[^"\']+(["\'])',
                   r'\g<1>1.9.22\g<2>',
@@ -142,10 +141,6 @@ jobs:
           if build.exists():
               text = build.read_text(encoding="utf-8")
 
-              # Old Flutter projects may use:
-              #
-              # ext.kotlin_version = '...'
-              #
               text = re.sub(
                   r"(kotlin_version\s*=\s*['\"])[^'\"]+(['\"])",
                   r"\g<1>1.9.22\g<2>",
@@ -158,11 +153,11 @@ jobs:
           PY
 
           echo ""
-          echo "Kotlin configuration after update:"
+          echo "Kotlin configuration:"
           grep -Rni "kotlin" android/settings.gradle android/build.gradle || true
 
       # ------------------------------------------------------
-      # FIX ANDROID COMPILE SDK
+      # ANDROID SDK
       # ------------------------------------------------------
       - name: Configure Android SDK
         run: |
@@ -183,42 +178,46 @@ jobs:
 
               text = path.read_text(encoding="utf-8")
 
-              # Groovy:
-              # compileSdk flutter.compileSdkVersion
-              #
-              # Kotlin DSL:
-              # compileSdk = flutter.compileSdkVersion
+              # Flutter 3.24 compatibility:
+              # use Android API 34 instead of API 35.
+
               text = re.sub(
                   r'compileSdk\s+flutter\.compileSdkVersion',
-                  'compileSdk 35',
+                  'compileSdk 34',
                   text
               )
 
               text = re.sub(
                   r'compileSdk\s*=\s*flutter\.compileSdkVersion',
-                  'compileSdk = 35',
+                  'compileSdk = 34',
                   text
               )
 
               text = re.sub(
                   r'compileSdk\s+[0-9]+',
-                  'compileSdk 35',
+                  'compileSdk 34',
                   text
               )
 
               text = re.sub(
                   r'compileSdk\s*=\s*[0-9]+',
-                  'compileSdk = 35',
+                  'compileSdk = 34',
                   text
               )
 
               path.write_text(text, encoding="utf-8")
 
-          print("Compile SDK configured.")
+              print(f"Updated: {path}")
+
+          print("Android compileSdk set to 34.")
           PY
 
+          echo ""
+          echo "Final compileSdk:"
+          grep -Rni "compileSdk" android/app || true
+
       # ------------------------------------------------------
-      # INTERNET + VIBRATE PERMISSIONS
+      # ANDROID PERMISSIONS
       # ------------------------------------------------------
       - name: Configure Android permissions
         run: |
@@ -252,13 +251,13 @@ jobs:
 
           if insertion:
               insertion += "\n"
+
               text = (
                   text[:manifest_end + 1]
                   + insertion
                   + text[manifest_end + 1:]
               )
 
-          # App name
           text = text.replace(
               'android:label="liv_app"',
               'android:label="LIV"'
@@ -281,24 +280,20 @@ jobs:
           set -e
 
           flutter clean
+
+          # pubspec.lock is intentionally regenerated
+          # by Flutter/Pub during the build.
+          rm -f pubspec.lock
+
           flutter pub get
 
-      # ------------------------------------------------------
-      # VERIFY KOTLIN DEPENDENCY
-      # ------------------------------------------------------
-      - name: Verify Kotlin dependencies
-        run: |
-          set -e
-
-          echo "Flutter pub deps:"
+          echo ""
+          echo "Resolved dependencies:"
           flutter pub deps
 
           echo ""
-          echo "Gradle Kotlin files:"
-          find "$HOME/.gradle/caches" \
-            -iname "*kotlin*1.9.22*" \
-            -o -iname "*kotlin-stdlib*" \
-            | head -50 || true
+          echo "shared_preferences resolution:"
+          flutter pub deps | grep -A 8 -B 2 "shared_preferences" || true
 
       # ------------------------------------------------------
       # ANALYZE
@@ -317,7 +312,7 @@ jobs:
 
           if [ "$EXIT_CODE" -ne 0 ]; then
             echo "Flutter analyze found issues."
-            echo "Continuing to Android compilation."
+            echo "Continuing to Android build."
           else
             echo "Flutter analyze passed."
           fi
@@ -355,9 +350,9 @@ jobs:
           echo "Release APK built successfully."
 
       # ------------------------------------------------------
-      # SHOW APK
+      # VERIFY RELEASE APK
       # ------------------------------------------------------
-      - name: Verify APK
+      - name: Verify release APK
         run: |
           set -e
 
@@ -365,11 +360,15 @@ jobs:
 
           test -f "$APK"
 
-          echo "APK:"
+          echo ""
+          echo "Release APK:"
           ls -lh "$APK"
 
+          echo ""
+          echo "Release APK verified successfully."
+
       # ------------------------------------------------------
-      # UPLOAD RELEASE APK
+      # UPLOAD APK
       # ------------------------------------------------------
       - name: Upload APK
         uses: actions/upload-artifact@v4
