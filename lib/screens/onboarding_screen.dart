@@ -56,6 +56,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final state = context.read<AppState>();
     final t = L10n.of(state.profile.locale);
 
+    final isArabic = state.profile.locale == 'ar';
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -83,7 +85,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     TextButton(
                       onPressed: _previousPage,
                       child: Text(
-                        t.home == 'الرئيسية' ? 'رجوع' : 'Back',
+                        isArabic ? 'رجوع' : 'Back',
                       ),
                     )
                   else
@@ -94,7 +96,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: Text(
                       _currentPage < 2
                           ? t.next
-                          : (t.home == 'الرئيسية' ? 'ابدأ' : 'Start'),
+                          : (isArabic ? 'ابدأ' : 'Start'),
                     ),
                   ),
                 ],
@@ -130,7 +132,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Text(
               'Welcome to LIV',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
@@ -139,7 +144,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'A simple space to organize your life, build better habits, and work toward your dreams.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge,
-              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -164,7 +168,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Text(
               'What should we call you?',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
@@ -173,7 +180,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'Tell LIV your name so your experience feels more personal.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
             TextField(
@@ -209,7 +215,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Text(
               'Build the life you want',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
@@ -218,7 +227,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'Track your habits, dreams, progress, and daily activities in one place.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge,
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
             Card(
