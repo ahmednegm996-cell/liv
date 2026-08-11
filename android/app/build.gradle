@@ -28,10 +28,11 @@ android {
 
     buildTypes {
         release {
+            // Keep minify off for now — it was stripping Flutter/Google Fonts resources
+            // and making the UI look completely different.
             signingConfig = signingConfigs.debug
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
