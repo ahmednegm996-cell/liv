@@ -1,456 +1,59 @@
 name: Build APK
-
 on:
   workflow_dispatch:
   push:
     branches: [main, master]
 
-permissions:
-  contents: read
-
 jobs:
   build:
     name: Build Flutter APK
     runs-on: ubuntu-latest
-
     steps:
-
-      # ======================================================
-      # CHECKOUT
-      # ======================================================
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ======================================================
-      # JAVA 17
-      # ======================================================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'
 
-      # ======================================================
-      # FLUTTER
-      # ======================================================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.0"
-          channel: stable
+          flutter-version: '3.24.0'
+          channel: 'stable'
           cache: true
 
-      # ======================================================
-      # VERIFY SOURCE
-      # ======================================================
-      - name: Verify repository sources
+      - name: Ensure Gradle Wrapper
         run: |
           set -e
-
-          test -f pubspec.yaml
-          test -f lib/main.dart
-          test -d lib
-
-          echo "Repository source tree:"
-          find lib -maxdepth 3 -type f | sort
-
-          echo "Source verification passed."
-
-      # ======================================================
-      # CREATE ANDROID PROJECT
-      # ======================================================
-      - name: Create Android project
-        run: |
-          set -e
-
-          flutter create \
-            --platforms=android \
-            --org com.liv \
-            --project-name liv_app \
-            .
-
-          echo "Android project created."
-
-      # ======================================================
-      # UPGRADE ANDROID BUILD SYSTEM
-      # ======================================================
-      - name: Configure Android Gradle and Kotlin
-        run: |
-          set -e
-
-          echo "Configuring Android Gradle Plugin and Kotlin..."
-
-          # --------------------------------------------------
-          # settings.gradle
-          # --------------------------------------------------
-
-          SETTINGS="android/settings.gradle"
-
-          test -f "$SETTINGS"
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("android/settings.gradle")
-          text = path.read_text(encoding="utf-8")
-
-          # Android Gradle Plugin
-          text = text.replace(
-              'id "com.android.application" version "8.3.1"',
-              'id "com.android.application" version "8.6.1"'
-          )
-
-          text = text.replace(
-              'id "com.android.application" version "8.3.2"',
-              'id "com.android.application" version "8.6.1"'
-          )
-
-          # Kotlin
-          text = text.replace(
-              'id "org.jetbrains.kotlin.android" version "1.8.22"',
-              'id "org.jetbrains.kotlin.android" version "1.9.24"'
-          )
-
-          text = text.replace(
-              'id "org.jetbrains.kotlin.android" version "1.9.0"',
-              'id "org.jetbrains.kotlin.android" version "1.9.24"'
-          )
-
-          text = text.replace(
-              'id "org.jetbrains.kotlin.android" version "1.9.10"',
-              'id "org.jetbrains.kotlin.android" version "1.9.24"'
-          )
-
-          path.write_text(text, encoding="utf-8")
-
-          print("settings.gradle updated.")
-          PY
-
-          # --------------------------------------------------
-          # android/build.gradle
-          # --------------------------------------------------
-
-          if [ -f android/build.gradle ]; then
-
-            python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("android/build.gradle")
-          text = path.read_text(encoding="utf-8")
-
-          # Remove old Kotlin version declarations if present.
-          text = text.replace(
-              "ext.kotlin_version = '1.6.10'",
-              "ext.kotlin_version = '1.9.24'"
-          )
-
-          text = text.replace(
-              "ext.kotlin_version = '1.6.21'",
-              "ext.kotlin_version = '1.9.24'"
-          )
-
-          text = text.replace(
-              "ext.kotlin_version = '1.7.10'",
-              "ext.kotlin_version = '1.9.24'"
-          )
-
-          text = text.replace(
-              "ext.kotlin_version = '1.7.20'",
-              "ext.kotlin_version = '1.9.24'"
-          )
-
-          text = text.replace(
-              "ext.kotlin_version = '1.8.0'",
-              "ext.kotlin_version = '1.9.24'"
-          )
-
-          text = text.replace(
-              "ext.kotlin_version = '1.8.22'",
-              "ext.kotlin_version = '1.9.24'"
-          )
-
-          text = text.replace(
-              "ext.kotlin_version = '1.9.0'",
-              "ext.kotlin_version = '1.9.24'"
-          )
-
-          path.write_text(text, encoding="utf-8")
-
-          print("android/build.gradle updated.")
-          PY
-
+          mkdir -p android/gradle/wrapper
+          if [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Downloading gradle-wrapper.jar..."
+            curl -sL -o android/gradle/wrapper/gradle-wrapper.jar \
+              https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar
           fi
-
-      # ======================================================
-      # FORCE COMPILE SDK 35
-      # ======================================================
-      - name: Configure compile SDK 35
-        run: |
-          set -e
-
-          echo "Configuring compileSdk 35..."
-
-          if [ -f android/app/build.gradle ]; then
-
-            sed -i -E \
-              's/compileSdk[[:space:]]+[0-9]+/compileSdk 35/g' \
-              android/app/build.gradle || true
-
-            sed -i -E \
-              's/compileSdk[[:space:]]*=[[:space:]]*[0-9]+/compileSdk = 35/g' \
-              android/app/build.gradle || true
-
-          fi
-
-          if [ -f android/app/build.gradle.kts ]; then
-
-            sed -i -E \
-              's/compileSdk[[:space:]]*=[[:space:]]*[0-9]+/compileSdk = 35/g' \
-              android/app/build.gradle.kts || true
-
-          fi
-
-          echo "compileSdk configuration:"
-          grep -R "compileSdk" android/app || true
-
-      # ======================================================
-      # GRADLE WRAPPER
-      # ======================================================
-      - name: Configure Gradle wrapper
-        run: |
-          set -e
-
-          cd android
-
-          ./gradlew wrapper \
-            --gradle-version 8.7 \
-            --distribution-type all
-
-          cd ..
-
-          echo "Gradle wrapper configured."
-
-          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
-
-      # ======================================================
-      # REINSTALL ANDROID SDK 35
-      # ======================================================
-      - name: Reinstall Android SDK 35
-        run: |
-          set -e
-
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          fi
-
-          echo "Using sdkmanager:"
-          "$SDKMANAGER" --version
-
-          echo "Removing Android SDK 35..."
-
-          "$SDKMANAGER" --uninstall "platforms;android-35" || true
-
-          echo "Installing Android SDK 35..."
-
-          "$SDKMANAGER" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-          echo "Android SDK 35 installed."
-
-          ls -lh "$ANDROID_SDK_ROOT/platforms/android-35/android.jar"
-
-      # ======================================================
-      # ANDROID PERMISSIONS
-      # ======================================================
-      - name: Configure Android permissions
-        run: |
-          set -e
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-
-          test -f "$MANIFEST"
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("android/app/src/main/AndroidManifest.xml")
-          text = path.read_text(encoding="utf-8")
-
-          internet = '<uses-permission android:name="android.permission.INTERNET"/>'
-          vibrate = '<uses-permission android:name="android.permission.VIBRATE"/>'
-
-          if internet not in text:
-              marker = text.find(">")
-              if marker != -1:
-                  text = (
-                      text[:marker + 1]
-                      + "\n    "
-                      + internet
-                      + "\n"
-                      + text[marker + 1:]
-                  )
-
-          if vibrate not in text:
-              marker = text.find(">")
-              if marker != -1:
-                  text = (
-                      text[:marker + 1]
-                      + "\n    "
-                      + vibrate
-                      + "\n"
-                      + text[marker + 1:]
-                  )
-
-          text = text.replace(
-              'android:label="liv_app"',
-              'android:label="LIV"'
-          )
-
-          path.write_text(text, encoding="utf-8")
-
-          print("Android permissions configured.")
-          PY
-
-      # ======================================================
-      # DEPENDENCIES
-      # ======================================================
-      - name: Get dependencies
-        run: |
-          set -e
-
-          flutter pub get
-
-      # ======================================================
-      # SHOW BUILD CONFIG
-      # ======================================================
-      - name: Show build configuration
-        run: |
-          set -e
-
-          echo "================ FLUTTER ================"
-          flutter --version
-
-          echo ""
-          echo "================ JAVA ================"
-          java -version
-
-          echo ""
-          echo "================ GRADLE ================"
-          cd android
-          ./gradlew --version
-
-          echo ""
-          echo "================ SETTINGS.GRADLE ================"
-          cat settings.gradle
-
-          echo ""
-          echo "================ APP BUILD.GRADLE ================"
-          cat app/build.gradle
-
-          cd ..
-
-      # ======================================================
-      # ANALYZE
-      # ======================================================
-      - name: Flutter analyze
-        run: |
-          set +e
-
-          flutter analyze
-
-          EXIT_CODE=$?
-
-          set -e
-
-          echo "Flutter analyze exit code: $EXIT_CODE"
-
-          if [ "$EXIT_CODE" -ne 0 ]; then
-            echo "Flutter analyze found issues."
-            echo "Continuing to Android build."
+          if [ ! -f android/gradlew ]; then
+            echo "Downloading gradlew..."
+            curl -sL -o android/gradlew \
+              https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradlew
+            chmod +x android/gradlew
           else
-            echo "Flutter analyze passed."
+            chmod +x android/gradlew
           fi
+          echo "Gradle wrapper ready."
+          ls -la android/gradle/wrapper/
 
-          exit 0
+      - name: Get dependencies
+        run: flutter pub get
 
-      # ======================================================
-      # CLEAN EVERYTHING
-      # ======================================================
-      - name: Clean build
-        run: |
-          set -e
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
 
-          flutter clean
+      - name: Build APK (Release)
+        run: flutter build apk --release
 
-          rm -rf build
-          rm -rf android/.gradle
-
-          echo "Build cleaned."
-
-      # ======================================================
-      # GET DEPENDENCIES AGAIN
-      # ======================================================
-      - name: Get dependencies after clean
-        run: |
-          set -e
-
-          flutter pub get
-
-      # ======================================================
-      # DEBUG APK
-      # ======================================================
-      - name: Build debug APK
-        run: |
-          set -e
-
-          flutter build apk \
-            --debug \
-            --no-pub
-
-          test -f build/app/outputs/flutter-apk/app-debug.apk
-
-          echo "Debug APK built successfully."
-
-      # ======================================================
-      # RELEASE APK
-      # ======================================================
-      - name: Build release APK
-        run: |
-          set -e
-
-          flutter build apk \
-            --release \
-            --no-pub
-
-          test -f build/app/outputs/flutter-apk/app-release.apk
-
-          echo "Release APK built successfully."
-
-      # ======================================================
-      # VERIFY APK
-      # ======================================================
-      - name: Verify release APK
-        run: |
-          set -e
-
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-
-          test -f "$APK"
-
-          echo ""
-          echo "========================================"
-          echo "RELEASE APK SUCCESS"
-          echo "========================================"
-
-          ls -lh "$APK"
-
-      # ======================================================
-      # UPLOAD APK
-      # ======================================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
