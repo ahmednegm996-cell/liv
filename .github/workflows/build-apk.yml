@@ -124,7 +124,6 @@ jobs:
           rm -rf lib && cp -a /tmp/liv_lib_backup lib
           cp /tmp/liv_pubspec_backup pubspec.yaml
           if [ -d /tmp/liv_assets_backup/assets ]; then rm -rf assets && cp -a /tmp/liv_assets_backup/assets assets; fi
-          # re-apply native sounds after possible flutter create
           if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
 
       - name: Patch Gaps + Gemini + minify off
@@ -132,6 +131,17 @@ jobs:
           python3 << 'PY'
           from pathlib import Path
           import re, textwrap
+
+          # Canonical Gaps lives ONLY in widgets/common.dart
+          # ZIP app_theme.dart also defines Gaps → remove it to avoid import collision
+          theme = Path("lib/theme/app_theme.dart")
+          if theme.exists():
+              tt = theme.read_text(encoding="utf-8")
+              if "class Gaps" in tt:
+                  tt = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n", tt)
+                  theme.write_text(tt.rstrip() + "\n", encoding="utf-8")
+                  print("Removed duplicate Gaps from app_theme.dart")
+
           common = Path("lib/widgets/common.dart")
           COMPLETE_GAPS = """
           class Gaps {
@@ -159,6 +169,8 @@ jobs:
               else:
                   t = t.rstrip() + "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n"
               common.write_text(t.rstrip() + "\n", encoding="utf-8")
+              print("Gaps canonical in common.dart")
+
           gs = Path("lib/services/gemini_service.dart")
           if gs.exists():
               g = gs.read_text(encoding="utf-8")
