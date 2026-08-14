@@ -32,36 +32,35 @@ if canonical.stat().st_size < 1000:
 
 print(f"Using soundtrack asset: {ASSET} ({canonical.stat().st_size} bytes)")
 
-# --- pubspec: declare meditation track (+ icon if present) ---
+# --- pubspec: rewrite assets section cleanly (no fragile regex) ---
 pub = Path("pubspec.yaml")
 if pub.exists():
     t = pub.read_text(encoding="utf-8")
-    t = re.sub(
-        r"\n\s*-\s*assets/audio/(welcome_ambient|ai_ambient|meditation_ambient)\.(wav|mp3)\s*",
-        "\n",
-        t,
-    )
-    if ASSET not in t:
-        if re.search(r"^\s*assets:\s*$", t, re.M):
-            t = re.sub(
-                r"(^\s*assets:\s*$)",
-                r"\1\n    - " + ASSET,
-                t,
-                count=1,
-                flags=re.M,
-            )
-        elif "assets:" in t:
-            t = t.replace("  assets:\n", f"  assets:\n    - {ASSET}\n", 1)
-        else:
-            t += f"\nflutter:\n  assets:\n    - {ASSET}\n"
-    if Path("assets/icon/liv_icon.png").exists() and "assets/icon/liv_icon.png" not in t:
-        t = t.replace(
-            f"    - {ASSET}\n",
-            f"    - {ASSET}\n    - assets/icon/liv_icon.png\n",
-            1,
+    asset_entries = [ASSET]
+    if Path("assets/icon/liv_icon.png").exists():
+        asset_entries.append("assets/icon/liv_icon.png")
+
+    assets_block = "  assets:\n" + "".join(f"    - {a}\n" for a in asset_entries)
+
+    if re.search(r"(?m)^  assets:\n(?:    - .+\n)*", t):
+        t = re.sub(
+            r"(?m)^  assets:\n(?:    - .+\n)*",
+            assets_block,
+            t,
+            count=1,
         )
+    elif re.search(r"(?m)^flutter:\n", t):
+        t = re.sub(
+            r"(?m)^(flutter:\n(?:  .+\n)*)",
+            r"\1" + assets_block,
+            t,
+            count=1,
+        )
+    else:
+        t = t.rstrip() + "\n\nflutter:\n  uses-material-design: true\n" + assets_block
+
     pub.write_text(t, encoding="utf-8")
-    print("pubspec assets updated for meditation track")
+    print("pubspec assets rewritten:", asset_entries)
 
 # --- onboarding ---
 ob = Path("lib/screens/onboarding_screen.dart")
@@ -83,7 +82,6 @@ if "audio_service.dart" not in t:
         t = "import '../services/audio_service.dart';\n" + t
     changed = True
 
-# Remove injected fadeOut on complete that break continuity
 t2 = re.sub(
     r"\s*await\s+AudioService\.instance\.fadeOut\([^;]*\);\s*\n",
     "\n",
@@ -129,7 +127,6 @@ else:
         t = t2
         changed = True
 
-# Do NOT stop player on onboarding dispose (continuity → AI)
 if re.search(r"void\s+dispose\s*\([^)]*\)\s*\{[^}]*AudioService\.instance\.stop", t, re.S):
     t = re.sub(
         r"(void\s+dispose\s*\([^)]*\)\s*\{)\s*try\s*\{\s*AudioService\.instance\.stop\(\);\s*\}\s*catch\s*\([^)]*\)\s*\{\s*\}",
@@ -149,7 +146,6 @@ if changed:
 else:
     print("Onboarding already OK")
 
-# --- AI chat screens ---
 ai_files = list(Path("lib/screens").glob("*ai*chat*.dart"))
 ai_files += list(Path("lib/screens").glob("*Ai*Chat*.dart"))
 seen = set()
