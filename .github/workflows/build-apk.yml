@@ -36,7 +36,6 @@ jobs:
           mkdir -p /tmp/liv_extract
           unzip -qo /tmp/liv_app_full.zip -d /tmp/liv_extract
 
-          # Always restore full lib from zip (source of features)
           if [ -d /tmp/liv_extract/lib ]; then
             rm -rf lib
             cp -a /tmp/liv_extract/lib .
@@ -45,32 +44,27 @@ jobs:
             echo "ERROR: zip missing lib/" && exit 1
           fi
 
-          # Always use full onboarding (6116049)
           mkdir -p lib/screens
           curl -fsSL -o lib/screens/onboarding_screen.dart \
             "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
           echo "Installed full onboarding from 6116049"
           wc -l lib/screens/onboarding_screen.dart
 
-          # UX patches: colors + age Apple picker + period section in onboarding
           if [ -f ci/ux_period_patch.py ]; then
             python3 ci/ux_period_patch.py
             echo "Applied UX period + colors + age patch"
           fi
 
-          # Period bottom nav tab (female only) + PeriodScreen
           if [ -f ci/period_nav_patch.py ]; then
             python3 ci/period_nav_patch.py
             echo "Applied period bottom nav + PeriodScreen"
           fi
 
-          # Native tick haptic/sound for age picker (from #106)
           if [ -f ci/feedback_patch.py ]; then
             python3 ci/feedback_patch.py || echo "WARNING: feedback_patch non-fatal"
             echo "Applied feedback_patch"
           fi
 
-          # Meditation soundtrack: restore AudioService + wire onboarding/AI fade + mute
           if [ -f ci/soundtrack_patch.py ]; then
             curl -fsSL -o lib/services/audio_service.dart \
               "https://raw.githubusercontent.com/ahmednegm996-cell/liv/main/lib/services/audio_service.dart" || true
@@ -78,15 +72,12 @@ jobs:
             echo "Applied soundtrack_patch"
           fi
 
-          # Verify critical markers
           grep -qE "male|female|CupertinoPicker|_tickAgeItem|_periodSection|trackPeriod" lib/screens/onboarding_screen.dart \
             && echo "UX markers OK" || echo "WARNING: UX markers missing"
           grep -qE "PeriodScreen|showPeriod|water_drop" lib/screens/root_shell.dart \
             && echo "Period nav OK" || echo "WARNING: Period nav missing"
           test -f lib/screens/period_screen.dart && echo "period_screen.dart present" || echo "WARNING: period_screen.dart missing"
-          wc -l lib/screens/onboarding_screen.dart lib/screens/root_shell.dart
 
-          # Assets (audio ambient + icon)
           if [ -d /tmp/liv_extract/assets ]; then
             mkdir -p assets
             cp -a /tmp/liv_extract/assets/. assets/
@@ -94,12 +85,10 @@ jobs:
             find assets -type f | head -20
           fi
 
-          # Re-run soundtrack after assets restored so fallback copy works
           if [ -f ci/soundtrack_patch.py ]; then
             python3 ci/soundtrack_patch.py || true
           fi
 
-          # Pubspec: zip base + ensure speech/permission pins + audio assets
           if [ -f /tmp/liv_extract/pubspec.yaml ]; then
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
           fi
@@ -112,26 +101,19 @@ jobs:
                   "  audioplayers: ^6.1.0\n",
                   "  audioplayers: ^6.1.0\n  speech_to_text: 6.6.2\n  permission_handler: ^11.3.1\n",
               )
-          if "assets/audio/ai_ambient.wav" not in t and "assets/audio/" not in t:
-              t = t.replace(
-                  "  assets:\n",
-                  "  assets:\n    - assets/audio/welcome_ambient.wav\n    - assets/audio/ai_ambient.wav\n    - assets/audio/meditation_ambient.mp3\n    - assets/audio/meditation_ambient.wav\n",
-              )
           if "meditation_ambient" not in t:
               t = t.replace(
                   "  assets:\n",
-                  "  assets:\n    - assets/audio/meditation_ambient.mp3\n    - assets/audio/meditation_ambient.wav\n",
+                  "  assets:\n    - assets/audio/meditation_ambient.mp3\n    - assets/audio/meditation_ambient.wav\n    - assets/audio/welcome_ambient.wav\n    - assets/audio/ai_ambient.wav\n",
                   1,
               )
           import re
-          t = re.sub(r"^version:.*$", "version: 1.4.5+14", t, count=1, flags=re.M)
+          t = re.sub(r"^version:.*$", "version: 1.4.6+15", t, count=1, flags=re.M)
           p.write_text(t, encoding="utf-8")
           print("pubspec patched")
-          print(p.read_text())
           PY
 
           test -f lib/main.dart || (echo "ERROR: main missing" && exit 1)
-          grep -q "LivApp\|liv" lib/main.dart || true
           echo "Project files OK"
 
       - name: Ensure Android project (prefer committed modern config)
@@ -146,7 +128,6 @@ jobs:
           if [ -f android/app/build.gradle ] || [ -f android/app/build.gradle.kts ]; then
             echo "Using committed modern android/ config"
           else
-            echo "No android/ — scaffolding with flutter create"
             flutter create --platforms=android --org com.liv --project-name liv_app . || true
           fi
 
@@ -237,7 +218,6 @@ jobs:
           import re
           p = Path("android/app/src/main/AndroidManifest.xml")
           if not p.exists():
-              print("No manifest yet")
               raise SystemExit(0)
           text = p.read_text(encoding="utf-8")
           for perm in [
@@ -268,26 +248,18 @@ jobs:
           set -e
           mkdir -p android/app
           USE_RELEASE_SIGNING=0
-
           if [ -f ci/ks.b64 ]; then
             base64 -d ci/ks.b64 > android/app/liv-release.keystore
-            ls -la android/app/liv-release.keystore
             if keytool -list -keystore android/app/liv-release.keystore -storepass liv2026secure -alias liv >/dev/null 2>&1; then
-              echo "Keystore OK — using release signing"
+              echo "Keystore OK"
               USE_RELEASE_SIGNING=1
             else
-              echo "WARNING: keystore invalid — falling back to debug signing"
+              echo "WARNING: keystore invalid — debug signing"
               rm -f android/app/liv-release.keystore
             fi
-          else
-            echo "WARNING: no ci/ks.b64 — debug signing"
           fi
-
           if [ "$USE_RELEASE_SIGNING" = "1" ]; then
             printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
-            if [ -f ci/sign.b64 ]; then
-              base64 -d ci/sign.b64 > /tmp/sign.py && python3 /tmp/sign.py || true
-            fi
             python3 << 'INNER'
           from pathlib import Path
           import re
@@ -313,24 +285,13 @@ jobs:
               )
               if "signingConfigs" not in t:
                   t = t.replace("android {\n", "android {\n" + signing_block, 1)
-              t = re.sub(
-                  r"signingConfig\s*=\s*signingConfigs\.debug",
-                  "signingConfig = signingConfigs.release",
-                  t,
-              )
+              t = re.sub(r"signingConfig\s*=\s*signingConfigs\.debug", "signingConfig = signingConfigs.release", t)
               if "signingConfig = signingConfigs.release" not in t and "release {" in t:
-                  t = t.replace(
-                      "release {\n",
-                      "release {\n            signingConfig = signingConfigs.release\n",
-                      1,
-                  )
+                  t = t.replace("release {\n", "release {\n            signingConfig = signingConfigs.release\n", 1)
               f.write_text(t, encoding="utf-8")
               print("Release signing wired")
-          else:
-              print("Signing config left as-is")
           INNER
           else
-            echo "Using debug signing (no valid release keystore)"
             python3 << 'INNER'
           from pathlib import Path
           import re
@@ -341,10 +302,8 @@ jobs:
               t = f.read_text(encoding="utf-8")
               t = re.sub(r"\s*signingConfig\s*=\s*signingConfigs\.release\s*\n?", "\n", t)
               f.write_text(t, encoding="utf-8")
-              print("Cleared release signingConfig from", fpath)
           INNER
           fi
-          echo "Signing step done"
 
       - name: Get dependencies
         run: flutter pub get
@@ -353,7 +312,14 @@ jobs:
         run: dart run flutter_launcher_icons || true
 
       - name: Build APK (Release)
-        run: flutter build apk --release
+        run: |
+          set -e
+          flutter build apk --release --no-tree-shake-icons 2>&1 | tee /tmp/flutter_build.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "===== FLUTTER BUILD TAIL ====="
+            tail -100 /tmp/flutter_build.log || true
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
