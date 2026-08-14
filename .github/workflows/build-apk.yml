@@ -255,25 +255,36 @@ jobs:
         run: |
           set -e
           mkdir -p android/app
+          USE_RELEASE_SIGNING=0
+
           if [ -f ci/ks.b64 ]; then
             base64 -d ci/ks.b64 > android/app/liv-release.keystore
             ls -la android/app/liv-release.keystore
+            # Validate keystore can actually be read (catches Invalid lenByte)
+            if keytool -list -keystore android/app/liv-release.keystore -storepass liv2026secure -alias liv >/dev/null 2>&1; then
+              echo "Keystore OK — using release signing"
+              USE_RELEASE_SIGNING=1
+            else
+              echo "WARNING: keystore invalid — falling back to debug signing"
+              rm -f android/app/liv-release.keystore
+            fi
           else
             echo "WARNING: no ci/ks.b64 — debug signing"
           fi
-          printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
-          if [ -f ci/sign.b64 ]; then
-            base64 -d ci/sign.b64 > /tmp/sign.py && python3 /tmp/sign.py || true
-          fi
-          # Ensure release uses the keystore when present
-          python3 << 'PY'
+
+          if [ "$USE_RELEASE_SIGNING" = "1" ]; then
+            printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
+            if [ -f ci/sign.b64 ]; then
+              base64 -d ci/sign.b64 > /tmp/sign.py && python3 /tmp/sign.py || true
+            fi
+            python3 << 'INNER'
           from pathlib import Path
           import re
           f = Path("android/app/build.gradle")
           if not f.exists():
               raise SystemExit(0)
           t = f.read_text(encoding="utf-8")
-          if "liv-release.keystore" not in t and Path("android/app/liv-release.keystore").exists():
+          if Path("android/app/liv-release.keystore").exists():
               signing_block = (
                   "    signingConfigs {\n"
                   "        release {\n"
@@ -306,7 +317,22 @@ jobs:
               print("Release signing wired")
           else:
               print("Signing config left as-is")
-          PY
+          INNER
+          else
+            echo "Using debug signing (no valid release keystore)"
+            python3 << 'INNER'
+          from pathlib import Path
+          import re
+          for fpath in ["android/app/build.gradle", "android/app/build.gradle.kts"]:
+              f = Path(fpath)
+              if not f.exists():
+                  continue
+              t = f.read_text(encoding="utf-8")
+              t = re.sub(r"\s*signingConfig\s*=\s*signingConfigs\.release\s*\n?", "\n", t)
+              f.write_text(t, encoding="utf-8")
+              print("Cleared release signingConfig from", fpath)
+          INNER
+          fi
           echo "Signing step done"
 
       - name: Get dependencies
