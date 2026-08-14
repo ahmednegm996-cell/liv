@@ -1,68 +1,41 @@
 #!/usr/bin/env python3
-"""Wire full meditation track into onboarding + AI with continuity. No old ambient fallbacks."""
+"""Wire meditation track into onboarding + AI. Continuity, fade on finish, higher AI volume."""
 from pathlib import Path
 import re
 import sys
 
 ASSET = "assets/audio/meditation_ambient.mp3"
-LONG_ASSET = (
-    "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
-)
+LONG_ASSET = "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
 
-audio_dir = Path("assets/audio")
-audio_dir.mkdir(parents=True, exist_ok=True)
-
+Path("assets/audio").mkdir(parents=True, exist_ok=True)
 canonical = Path(ASSET)
 if not canonical.exists() or canonical.stat().st_size < 1000:
     long_p = Path(LONG_ASSET)
     if long_p.exists() and long_p.stat().st_size >= 1000:
         canonical.write_bytes(long_p.read_bytes())
-        print(f"Copied long-name MP3 → {ASSET} ({canonical.stat().st_size} bytes)")
+        print(f"Copied long-name MP3 → {ASSET}")
     else:
-        print(
-            f"ERROR: Required meditation track missing.\n"
-            f"  expected: {ASSET}\n"
-            f"  or:       {LONG_ASSET}"
-        )
+        print(f"ERROR: Required meditation track missing: {ASSET}")
         sys.exit(1)
-
-if canonical.stat().st_size < 1000:
-    print(f"ERROR: {ASSET} is too small ({canonical.stat().st_size} bytes)")
-    sys.exit(1)
 
 print(f"Using soundtrack asset: {ASSET} ({canonical.stat().st_size} bytes)")
 
-# --- pubspec: rewrite assets section cleanly (no fragile regex) ---
 pub = Path("pubspec.yaml")
 if pub.exists():
     t = pub.read_text(encoding="utf-8")
     asset_entries = [ASSET]
     if Path("assets/icon/liv_icon.png").exists():
         asset_entries.append("assets/icon/liv_icon.png")
-
     assets_block = "  assets:\n" + "".join(f"    - {a}\n" for a in asset_entries)
-
     if re.search(r"(?m)^  assets:\n(?:    - .+\n)*", t):
-        t = re.sub(
-            r"(?m)^  assets:\n(?:    - .+\n)*",
-            assets_block,
-            t,
-            count=1,
-        )
+        t = re.sub(r"(?m)^  assets:\n(?:    - .+\n)*", assets_block, t, count=1)
     elif re.search(r"(?m)^flutter:\n", t):
-        t = re.sub(
-            r"(?m)^(flutter:\n(?:  .+\n)*)",
-            r"\1" + assets_block,
-            t,
-            count=1,
-        )
+        t = re.sub(r"(?m)^(flutter:\n(?:  .+\n)*)", r"\1" + assets_block, t, count=1)
     else:
         t = t.rstrip() + "\n\nflutter:\n  uses-material-design: true\n" + assets_block
-
     pub.write_text(t, encoding="utf-8")
     print("pubspec assets rewritten:", asset_entries)
 
-# --- onboarding ---
 ob = Path("lib/screens/onboarding_screen.dart")
 if not ob.exists():
     print("ERROR: onboarding_screen.dart missing")
@@ -82,149 +55,74 @@ if "audio_service.dart" not in t:
         t = "import '../services/audio_service.dart';\n" + t
     changed = True
 
+if "playLoop(" not in t:
+    if re.search(r"void\s+initState\s*\(\s*\)\s*\{", t):
+        t = re.sub(
+            r"(void\s+initState\s*\(\s*\)\s*\{\s*super\.initState\(\);)",
+            r"\1\n    AudioService.instance.playLoop(\n      '" + ASSET + r"',\n      volume: 0.26,\n      fadeIn: true,\n    );",
+            t,
+            count=1,
+        )
+        changed = True
+
+# Fade-out when questions fully finish
+if "completeOnboarding" in t and "AudioService.instance.fadeOut" not in t:
+    t2 = re.sub(
+        r"((await\s+)?state\.completeOnboarding\([^;]*\);)",
+        r"await AudioService.instance.fadeOut(duration: const Duration(milliseconds: 1800));\n    \1",
+        t,
+        count=1,
+    )
+    if t2 != t:
+        t = t2
+        changed = True
+
+# Do not stop on onboarding dispose
 t2 = re.sub(
-    r"\s*await\s+AudioService\.instance\.fadeOut\([^;]*\);\s*\n",
-    "\n",
+    r"(void\s+dispose\s*\([^)]*\)\s*\{)\s*(try\s*\{\s*)?AudioService\.instance\.stop\(\);\s*(\}\s*catch\s*\([^)]*\)\s*\{\s*\})?",
+    r"\1",
     t,
 )
 if t2 != t:
     t = t2
     changed = True
 
-if "playLoop(" not in t:
-    if re.search(r"void\s+initState\s*\(\s*\)\s*\{", t):
-        t = re.sub(
-            r"(void\s+initState\s*\(\s*\)\s*\{\s*super\.initState\(\);)",
-            r"\1\n    AudioService.instance.playLoop(\n"
-            r"      '" + ASSET + r"',\n"
-            r"      volume: 0.26,\n"
-            r"      fadeIn: true,\n"
-            r"    );",
-            t,
-            count=1,
-        )
-        changed = True
-    else:
-        inject = (
-            "\n  @override\n  void initState() {\n    super.initState();\n"
-            f"    AudioService.instance.playLoop(\n      '{ASSET}',\n"
-            "      volume: 0.26,\n      fadeIn: true,\n    );\n  }\n"
-        )
-        t = re.sub(
-            r"(class\s+_OnboardingScreenState[^{]*\{)",
-            r"\1" + inject,
-            t,
-            count=1,
-        )
-        changed = True
-else:
-    t2 = re.sub(
-        r"AudioService\.instance\.playLoop\(\s*'[^']*'",
-        f"AudioService.instance.playLoop(\n      '{ASSET}'",
-        t,
-    )
-    if t2 != t:
-        t = t2
-        changed = True
-
-if re.search(r"void\s+dispose\s*\([^)]*\)\s*\{[^}]*AudioService\.instance\.stop", t, re.S):
-    t = re.sub(
-        r"(void\s+dispose\s*\([^)]*\)\s*\{)\s*try\s*\{\s*AudioService\.instance\.stop\(\);\s*\}\s*catch\s*\([^)]*\)\s*\{\s*\}",
-        r"\1",
-        t,
-    )
-    t = re.sub(
-        r"(void\s+dispose\s*\([^)]*\)\s*\{)\s*AudioService\.instance\.stop\(\);\s*",
-        r"\1",
-        t,
-    )
-    changed = True
-
 if changed:
     ob.write_text(t, encoding="utf-8")
-    print("Onboarding updated for continuous meditation track")
+    print("Onboarding updated")
 else:
     print("Onboarding already OK")
 
-ai_files = list(Path("lib/screens").glob("*ai*chat*.dart"))
-ai_files += list(Path("lib/screens").glob("*Ai*Chat*.dart"))
-seen = set()
-ai_files = [p for p in ai_files if str(p) not in seen and not seen.add(str(p))]
-
-for ai in ai_files:
+for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
     t = ai.read_text(encoding="utf-8")
-    changed = False
-
+    ch = False
     if "audio_service.dart" not in t:
         t = "import '../services/audio_service.dart';\n" + t
-        changed = True
-
-    for old in (
-        "assets/audio/ai_ambient.wav",
-        "assets/audio/welcome_ambient.wav",
-        "assets/audio/meditation_ambient.wav",
-        LONG_ASSET,
-    ):
+        ch = True
+    for old in ("assets/audio/ai_ambient.wav", "assets/audio/welcome_ambient.wav", LONG_ASSET):
         if old in t:
             t = t.replace(old, ASSET)
-            changed = True
-
+            ch = True
     t2 = re.sub(
         r"AudioService\.instance\.playLoop\(\s*'[^']*'\s*(,\s*volume:\s*[0-9.]+)?\s*(,\s*fadeIn:\s*(true|false))?\s*\)",
-        f"AudioService.instance.playLoop('{ASSET}', volume: 0.28, fadeIn: true)",
+        f"AudioService.instance.playLoop('{ASSET}', volume: 0.55, fadeIn: true)",
         t,
     )
     if t2 != t:
         t = t2
-        changed = True
-
+        ch = True
     if "AudioService.instance.stop()" in t:
         t = t.replace(
             "AudioService.instance.stop()",
             "AudioService.instance.fadeOut(duration: const Duration(milliseconds: 1200))",
         )
-        changed = True
-
-    if "volume_up_rounded" not in t and "volume_off_rounded" not in t:
-        if re.search(r"class\s+_\w+State\s+extends\s+State<", t) and "_muted" not in t:
-            t = re.sub(
-                r"(class\s+_\w+State\s+extends\s+State<[^>]+>\s*\{)",
-                r"\1\n  bool _muted = false;\n",
-                t,
-                count=1,
-            )
-            changed = True
-        mute_btn = """
-            IconButton(
-              tooltip: _muted ? 'تشغيل الصوت' : 'كتم الصوت',
-              icon: Icon(
-                _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                size: 22,
-              ),
-              onPressed: () async {
-                await AudioService.instance.toggleMute();
-                setState(() => _muted = AudioService.instance.isMuted);
-              },
-            ),
-"""
-        if re.search(r"child:\s*Row\(\s*children:\s*\[", t):
-            t = re.sub(
-                r"(child:\s*Row\(\s*children:\s*\[)",
-                r"\1" + mute_btn,
-                t,
-                count=1,
-            )
-            changed = True
-
-    if changed:
+        ch = True
+    if ch:
         ai.write_text(t, encoding="utf-8")
         print("AI updated:", ai)
-    else:
-        print("AI unchanged:", ai)
 
-for rp in [Path("lib/screens/root_shell.dart")]:
-    if not rp.exists():
-        continue
+rp = Path("lib/screens/root_shell.dart")
+if rp.exists():
     t = rp.read_text(encoding="utf-8")
     if "AudioService.instance.stop()" in t:
         t = t.replace(
@@ -232,6 +130,14 @@ for rp in [Path("lib/screens/root_shell.dart")]:
             "AudioService.instance.fadeOut(duration: const Duration(milliseconds: 1200))",
         )
         rp.write_text(t, encoding="utf-8")
-        print("root_shell: stop → fadeOut on leave AI")
+        print("root_shell fadeOut on leave AI")
+
+for hp in Path("lib/screens").glob("*.dart"):
+    if hp.name.startswith("onboarding"):
+        continue
+    ht = hp.read_text(encoding="utf-8")
+    if "AudioService.instance.tick()" in ht:
+        hp.write_text(ht.replace("AudioService.instance.tick()", "AudioService.instance.buttonClick()"), encoding="utf-8")
+        print("buttonClick wired:", hp)
 
 print("soundtrack_patch done OK")

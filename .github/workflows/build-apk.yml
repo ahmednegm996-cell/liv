@@ -35,22 +35,17 @@ jobs:
           LONG="assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
           if [ -f "$LONG" ]; then
             cp "$LONG" /tmp/liv_audio_preserve/meditation_ambient.mp3
-            echo "Preserved committed meditation MP3 ($(wc -c < /tmp/liv_audio_preserve/meditation_ambient.mp3) bytes)"
+            echo "Preserved committed meditation MP3"
           elif [ -f assets/audio/meditation_ambient.mp3 ]; then
             cp assets/audio/meditation_ambient.mp3 /tmp/liv_audio_preserve/meditation_ambient.mp3
-            echo "Preserved meditation_ambient.mp3"
           fi
 
-          echo "Downloading full Liv sources (zip)..."
           curl -fsSL -o /tmp/liv_app_full.zip "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
-          rm -rf /tmp/liv_extract
-          mkdir -p /tmp/liv_extract
+          rm -rf /tmp/liv_extract && mkdir -p /tmp/liv_extract
           unzip -qo /tmp/liv_app_full.zip -d /tmp/liv_extract
 
           if [ -d /tmp/liv_extract/lib ]; then
-            rm -rf lib
-            cp -a /tmp/liv_extract/lib .
-            echo "Restored full lib/ from zip"
+            rm -rf lib && cp -a /tmp/liv_extract/lib .
           else
             echo "ERROR: zip missing lib/" && exit 1
           fi
@@ -58,39 +53,18 @@ jobs:
           mkdir -p lib/services
           curl -fsSL -o lib/services/audio_service.dart \
             "https://raw.githubusercontent.com/ahmednegm996-cell/liv/main/lib/services/audio_service.dart"
-          echo "Installed AudioService from main"
 
           mkdir -p lib/screens
           curl -fsSL -o lib/screens/onboarding_screen.dart \
             "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
-          echo "Installed full onboarding from 6116049"
-          wc -l lib/screens/onboarding_screen.dart
 
-          if [ -f ci/ux_period_patch.py ]; then
-            python3 ci/ux_period_patch.py
-            echo "Applied UX period + colors + age patch"
-          fi
-
-          if [ -f ci/period_nav_patch.py ]; then
-            python3 ci/period_nav_patch.py
-            echo "Applied period bottom nav + PeriodScreen"
-          fi
-
-          if [ -f ci/feedback_patch.py ]; then
-            python3 ci/feedback_patch.py || echo "WARNING: feedback_patch non-fatal"
-            echo "Applied feedback_patch"
-          fi
-
-          grep -qE "male|female|CupertinoPicker|_tickAgeItem|_periodSection|trackPeriod" lib/screens/onboarding_screen.dart \
-            && echo "UX markers OK" || echo "WARNING: UX markers missing"
-          grep -qE "PeriodScreen|showPeriod|water_drop" lib/screens/root_shell.dart \
-            && echo "Period nav OK" || echo "WARNING: Period nav missing"
-          test -f lib/screens/period_screen.dart && echo "period_screen.dart present" || echo "WARNING: period_screen.dart missing"
+          if [ -f ci/ux_period_patch.py ]; then python3 ci/ux_period_patch.py; fi
+          if [ -f ci/period_nav_patch.py ]; then python3 ci/period_nav_patch.py; fi
+          if [ -f ci/feedback_patch.py ]; then python3 ci/feedback_patch.py || echo "WARNING: feedback_patch non-fatal"; fi
+          if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; echo "Applied sound_fix"; fi
 
           if [ -d /tmp/liv_extract/assets ]; then
-            mkdir -p assets
-            cp -a /tmp/liv_extract/assets/. assets/
-            echo "Restored assets/ from zip"
+            mkdir -p assets && cp -a /tmp/liv_extract/assets/. assets/
           fi
 
           mkdir -p assets/audio
@@ -98,137 +72,67 @@ jobs:
             cp /tmp/liv_audio_preserve/meditation_ambient.mp3 assets/audio/meditation_ambient.mp3
           fi
           if [ ! -s assets/audio/meditation_ambient.mp3 ]; then
-            echo "Fetching meditation track from main..."
             curl -fsSL -o assets/audio/meditation_ambient.mp3 \
               "https://raw.githubusercontent.com/ahmednegm996-cell/liv/main/assets/audio/Meditation%20Music%20for%20a%20Calm%20Background%20%20Quiet%20Echoes%20%20Brioso.mp3"
           fi
           if [ ! -s assets/audio/meditation_ambient.mp3 ]; then
-            echo "ERROR: meditation_ambient.mp3 missing — refusing to build with old ambient fallback"
-            exit 1
+            echo "ERROR: meditation_ambient.mp3 missing" && exit 1
           fi
-          ls -la assets/audio/meditation_ambient.mp3
-          echo "Meditation track ready ($(wc -c < assets/audio/meditation_ambient.mp3) bytes)"
 
-          # Prefer committed pubspec (valid YAML); fall back to ZIP only if missing
           if [ ! -f pubspec.yaml ] && [ -f /tmp/liv_extract/pubspec.yaml ]; then
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
-          elif [ -f /tmp/liv_extract/pubspec.yaml ]; then
-            echo "Keeping checked-out pubspec.yaml (not overwriting with ZIP)"
           fi
 
           python3 ci/soundtrack_patch.py
 
-          # Finalize pubspec deterministically — never use fragile asset-line regex
           python3 << 'PY'
           from pathlib import Path
           import re
-
           p = Path("pubspec.yaml")
           t = p.read_text(encoding="utf-8")
-
           if "speech_to_text" not in t:
               if "audioplayers:" in t:
-                  t = re.sub(
-                      r"(audioplayers:\s*[^\n]+\n)",
-                      r"\1  speech_to_text: 6.6.2\n  permission_handler: 11.3.1\n",
-                      t,
-                      count=1,
-                  )
-              else:
-                  t = t.replace(
-                      "dependencies:\n",
-                      "dependencies:\n  audioplayers: 6.1.0\n  speech_to_text: 6.6.2\n  permission_handler: 11.3.1\n",
-                      1,
-                  )
-
+                  t = re.sub(r"(audioplayers:\s*[^\n]+\n)", r"\1  speech_to_text: 6.6.2\n  permission_handler: 11.3.1\n", t, count=1)
           asset_entries = []
           if Path("assets/audio/meditation_ambient.mp3").exists():
               asset_entries.append("assets/audio/meditation_ambient.mp3")
-          long_name = "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
-          if Path(long_name).exists() and "assets/audio/meditation_ambient.mp3" not in asset_entries:
-              asset_entries.append(long_name)
           if Path("assets/icon/liv_icon.png").exists():
               asset_entries.append("assets/icon/liv_icon.png")
-
           if not asset_entries:
-              raise SystemExit("ERROR: no audio/icon assets found for pubspec")
-
+              raise SystemExit("ERROR: no assets")
           assets_block = "  assets:\n" + "".join(f"    - {a}\n" for a in asset_entries)
-
           if re.search(r"(?m)^  assets:\n(?:    - .+\n)*", t):
               t = re.sub(r"(?m)^  assets:\n(?:    - .+\n)*", assets_block, t, count=1)
-          elif re.search(r"(?m)^flutter:\n", t):
-              if "uses-material-design:" in t:
-                  t = re.sub(
-                      r"(?m)^(  uses-material-design:\s*\S+\n)",
-                      r"\1\n" + assets_block,
-                      t,
-                      count=1,
-                  )
-              else:
-                  t = re.sub(r"(?m)^(flutter:\n)", r"\1" + assets_block, t, count=1)
-          else:
-              t = t.rstrip() + "\n\nflutter:\n  uses-material-design: true\n" + assets_block
-
-          t = re.sub(r"^version:.*$", "version: 1.4.8+17", t, count=1, flags=re.M)
+          t = re.sub(r"^version:.*$", "version: 1.4.9+18", t, count=1, flags=re.M)
           p.write_text(t, encoding="utf-8")
-          print("pubspec finalized cleanly:")
-          print(p.read_text())
+          print("pubspec finalized")
           PY
 
-          if grep -n "AudioService.instance.stop" lib/screens/onboarding_screen.dart; then
-            echo "WARNING: onboarding still has stop() — stripping"
-            python3 << 'STRIPC'
-          from pathlib import Path
-          import re
-          p = Path('lib/screens/onboarding_screen.dart')
-          tt = p.read_text()
-          tt = re.sub(r'[ \t]*AudioService\.instance\.stop\(\);\s*\n?', '', tt)
-          p.write_text(tt)
-          STRIPC
-          fi
-
-          test -f lib/main.dart || (echo "ERROR: main missing" && exit 1)
-          test -s assets/audio/meditation_ambient.mp3 || (echo "ERROR: mp3 missing" && exit 1)
+          test -f lib/main.dart
+          test -s assets/audio/meditation_ambient.mp3
           echo "Project files OK"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
           set -e
-          rm -rf /tmp/liv_lib_backup
           cp -a lib /tmp/liv_lib_backup
           cp pubspec.yaml /tmp/liv_pubspec_backup
-          mkdir -p /tmp/liv_assets_backup
-          cp -a assets /tmp/liv_assets_backup/ 2>/dev/null || true
-
-          if [ -f android/app/build.gradle ] || [ -f android/app/build.gradle.kts ]; then
-            echo "Using committed modern android/ config"
-          else
+          mkdir -p /tmp/liv_assets_backup && cp -a assets /tmp/liv_assets_backup/ 2>/dev/null || true
+          if [ ! -f android/app/build.gradle ] && [ ! -f android/app/build.gradle.kts ]; then
             flutter create --platforms=android --org com.liv --project-name liv_app . || true
           fi
-
-          rm -rf lib
-          cp -a /tmp/liv_lib_backup lib
+          rm -rf lib && cp -a /tmp/liv_lib_backup lib
           cp /tmp/liv_pubspec_backup pubspec.yaml
-          if [ -d /tmp/liv_assets_backup/assets ]; then
-            rm -rf assets
-            cp -a /tmp/liv_assets_backup/assets assets
-          fi
-          test -f lib/main.dart
+          if [ -d /tmp/liv_assets_backup/assets ]; then rm -rf assets && cp -a /tmp/liv_assets_backup/assets assets; fi
+          # re-apply native sounds after possible flutter create
+          if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
 
       - name: Patch Gaps + Gemini + minify off
         run: |
           python3 << 'PY'
           from pathlib import Path
           import re, textwrap
-
           common = Path("lib/widgets/common.dart")
-          theme = Path("lib/theme/app_theme.dart")
-          if theme.exists():
-              t = theme.read_text(encoding="utf-8")
-              if "class Gaps" in t:
-                  theme.write_text(re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n", t), encoding="utf-8")
-
           COMPLETE_GAPS = """
           class Gaps {
             static const h4 = SizedBox(height: 4);
@@ -255,8 +159,6 @@ jobs:
               else:
                   t = t.rstrip() + "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n"
               common.write_text(t.rstrip() + "\n", encoding="utf-8")
-              print("Gaps OK")
-
           gs = Path("lib/services/gemini_service.dart")
           if gs.exists():
               g = gs.read_text(encoding="utf-8")
@@ -265,24 +167,16 @@ jobs:
                   idx = g.rfind("}")
                   if idx != -1:
                       gs.write_text(g[:idx] + method + g[idx:], encoding="utf-8")
-
           for f in [Path("android/app/build.gradle"), Path("android/app/build.gradle.kts")]:
               if not f.exists():
                   continue
               t = f.read_text(encoding="utf-8")
               t = re.sub(r"minifyEnabled\s+[^\n]+", "minifyEnabled false", t)
               t = re.sub(r"shrinkResources\s+[^\n]+", "shrinkResources false", t)
-              if "minifyEnabled" not in t and "buildTypes" in t:
-                  t = t.replace(
-                      "release {",
-                      "release {\n            minifyEnabled false\n            shrinkResources false",
-                      1,
-                  )
               f.write_text(t, encoding="utf-8")
-              print("minify disabled in", f)
           PY
 
-      - name: Force compileSdk 35 + permissions
+      - name: Force compileSdk 35 + permissions + no backup
         run: |
           set -e
           for f in android/app/build.gradle android/app/build.gradle.kts; do
@@ -296,17 +190,14 @@ jobs:
           if not p.exists():
               raise SystemExit(0)
           text = p.read_text(encoding="utf-8")
-          for perm in [
-              'android.permission.INTERNET',
-              'android.permission.VIBRATE',
-              'android.permission.RECORD_AUDIO',
-          ]:
-              tag = f'<uses-permission android:name="{perm}"/>'
+          for perm in ['android.permission.INTERNET','android.permission.VIBRATE','android.permission.RECORD_AUDIO']:
               if perm not in text:
-                  text = re.sub(r'(<manifest[^>]*>)', r'\1\n    ' + tag, text, count=1)
+                  text = re.sub(r'(<manifest[^>]*>)', r'\1\n    <uses-permission android:name="'+perm+'"/>', text, count=1)
           text = re.sub(r'android:label="[^"]*"', 'android:label="LIV"', text, count=1)
+          if 'allowBackup' not in text:
+              text = text.replace('<application', '<application android:allowBackup="false" android:fullBackupContent="false"', 1)
           p.write_text(text, encoding="utf-8")
-          print("Permissions + label OK")
+          print("Permissions + allowBackup=false OK")
           PY
 
       - name: Bump Kotlin AGP Gradle if needed
@@ -324,27 +215,18 @@ jobs:
           set -e
           mkdir -p android/app
           USE_RELEASE_SIGNING=0
-
           if [ -f ci/ks.b64 ]; then
             base64 -d ci/ks.b64 > android/app/liv-release.keystore
-            ls -la android/app/liv-release.keystore
             if keytool -list -keystore android/app/liv-release.keystore -storepass liv2026secure -alias liv >/dev/null 2>&1; then
-              echo "Keystore OK — will use release signing"
               USE_RELEASE_SIGNING=1
             else
-              echo "WARNING: keystore invalid — debug signing"
               rm -f android/app/liv-release.keystore
             fi
-          else
-            echo "WARNING: no ci/ks.b64 — debug signing"
           fi
-
           if [ "$USE_RELEASE_SIGNING" = "1" ]; then
             printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
           fi
-
           python3 ci/fix_signing.py
-          echo "Signing step done"
 
       - name: Get dependencies
         run: flutter pub get
@@ -357,7 +239,6 @@ jobs:
           set -e
           flutter build apk --release --no-tree-shake-icons 2>&1 | tee /tmp/flutter_build.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "===== FLUTTER BUILD TAIL ====="
             tail -100 /tmp/flutter_build.log || true
             exit 1
           fi
