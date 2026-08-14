@@ -248,62 +248,108 @@ jobs:
           set -e
           mkdir -p android/app
           USE_RELEASE_SIGNING=0
+
           if [ -f ci/ks.b64 ]; then
             base64 -d ci/ks.b64 > android/app/liv-release.keystore
+            ls -la android/app/liv-release.keystore
             if keytool -list -keystore android/app/liv-release.keystore -storepass liv2026secure -alias liv >/dev/null 2>&1; then
-              echo "Keystore OK"
+              echo "Keystore OK — will use release signing"
               USE_RELEASE_SIGNING=1
             else
               echo "WARNING: keystore invalid — debug signing"
               rm -f android/app/liv-release.keystore
             fi
+          else
+            echo "WARNING: no ci/ks.b64 — debug signing"
           fi
+
           if [ "$USE_RELEASE_SIGNING" = "1" ]; then
             printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
-            python3 << 'INNER'
+          fi
+
+          python3 << 'INNER'
           from pathlib import Path
           import re
+
           f = Path("android/app/build.gradle")
           if not f.exists():
+              print("No build.gradle — skip")
               raise SystemExit(0)
+
           t = f.read_text(encoding="utf-8")
-          if Path("android/app/liv-release.keystore").exists():
-              signing_block = (
-                  "    signingConfigs {\n"
-                  "        release {\n"
-                  "            def keystoreProperties = new Properties()\n"
-                  "            def keystorePropertiesFile = rootProject.file('key.properties')\n"
-                  "            if (keystorePropertiesFile.exists()) {\n"
-                  "                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n"
-                  "                keyAlias keystoreProperties['keyAlias']\n"
-                  "                keyPassword keystoreProperties['keyPassword']\n"
-                  "                storeFile file(keystoreProperties['storeFile'])\n"
-                  "                storePassword keystoreProperties['storePassword']\n"
-                  "            }\n"
-                  "        }\n"
-                  "    }\n"
-              )
-              if "signingConfigs" not in t:
-                  t = t.replace("android {\n", "android {\n" + signing_block, 1)
-              t = re.sub(r"signingConfig\s*=\s*signingConfigs\.debug", "signingConfig = signingConfigs.release", t)
-              if "signingConfig = signingConfigs.release" not in t and "release {" in t:
-                  t = t.replace("release {\n", "release {\n            signingConfig = signingConfigs.release\n", 1)
-              f.write_text(t, encoding="utf-8")
-              print("Release signing wired")
+          use_release = Path("android/app/liv-release.keystore").exists()
+
+          # 1) Remove any existing signingConfigs { ... } block
+          t = re.sub(
+              r"\n[ \t]*signingConfigs[ \t]*\{(?:[^{}]|\{[^{}]*\})*\}[ \t]*\n",
+              "\n",
+              t,
+              count=1,
+          )
+
+          # 2) Remove any signingConfig = ... lines
+          t = re.sub(
+              r"[ \t]*signingConfig[ \t]*=[ \t]*signingConfigs\.\w+[ \t]*\n",
+              "",
+              t,
+          )
+
+          # 3) Inject signingConfigs after android {
+          if use_release:
+              block = """
+    signingConfigs {
+        release {
+            def keystoreProperties = new Properties()
+            def keystorePropertiesFile = rootProject.file('key.properties')
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+"""
+              t = re.sub(r"(android[ \t]*\{)", r"\1" + block, t, count=1)
+
+              # 4) Add signingConfig inside buildTypes.release only
+              m = re.search(r"(buildTypes[ \t]*\{[^{}]*release[ \t]*\{)", t, re.S)
+              if m:
+                  t = t[:m.end()] + "\n            signingConfig = signingConfigs.release" + t[m.end():]
+                  print("Injected signingConfig into buildTypes.release")
+              else:
+                  m2 = re.search(r"buildTypes[ \t]*\{", t)
+                  if m2:
+                      m3 = re.search(r"release[ \t]*\{", t[m2.end():])
+                      if m3:
+                          pos = m2.end() + m3.end()
+                          t = t[:pos] + "\n            signingConfig = signingConfigs.release" + t[pos:]
+                          print("Injected signingConfig (fallback)")
+                  else:
+                      print("WARNING: could not find buildTypes.release")
+          else:
+              m = re.search(r"(buildTypes[ \t]*\{[^{}]*release[ \t]*\{)", t, re.S)
+              if m:
+                  t = t[:m.end()] + "\n            signingConfig = signingConfigs.debug" + t[m.end():]
+              print("Using debug signing for release")
+
+          # 5) minify off
+          t = re.sub(r"minifyEnabled[ \t]+[^\n]+", "minifyEnabled false", t)
+          t = re.sub(r"shrinkResources[ \t]+[^\n]+", "shrinkResources false", t)
+          if "minifyEnabled" not in t:
+              m = re.search(r"buildTypes[ \t]*\{[^{}]*release[ \t]*\{", t, re.S)
+              if m:
+                  t = t[:m.end()] + "\n            minifyEnabled false\n            shrinkResources false" + t[m.end():]
+
+          f.write_text(t, encoding="utf-8")
+          print("--- relevant lines ---")
+          for i, line in enumerate(f.read_text().splitlines(), 1):
+              low = line.lower()
+              if any(k in low for k in ("signing", "release", "minify", "shrink", "buildtypes")):
+                  print(f"{i}: {line}")
           INNER
-          else
-            python3 << 'INNER'
-          from pathlib import Path
-          import re
-          for fpath in ["android/app/build.gradle", "android/app/build.gradle.kts"]:
-              f = Path(fpath)
-              if not f.exists():
-                  continue
-              t = f.read_text(encoding="utf-8")
-              t = re.sub(r"\s*signingConfig\s*=\s*signingConfigs\.release\s*\n?", "\n", t)
-              f.write_text(t, encoding="utf-8")
-          INNER
-          fi
+          echo "Signing step done"
 
       - name: Get dependencies
         run: flutter pub get
