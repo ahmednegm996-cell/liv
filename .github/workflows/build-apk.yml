@@ -109,37 +109,71 @@ jobs:
           ls -la assets/audio/meditation_ambient.mp3
           echo "Meditation track ready ($(wc -c < assets/audio/meditation_ambient.mp3) bytes)"
 
-          if [ -f /tmp/liv_extract/pubspec.yaml ]; then
+          # Prefer committed pubspec (valid YAML); fall back to ZIP only if missing
+          if [ ! -f pubspec.yaml ] && [ -f /tmp/liv_extract/pubspec.yaml ]; then
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
+          elif [ -f /tmp/liv_extract/pubspec.yaml ]; then
+            echo "Keeping checked-out pubspec.yaml (not overwriting with ZIP)"
           fi
 
           python3 ci/soundtrack_patch.py
 
+          # Finalize pubspec deterministically — never use fragile asset-line regex
           python3 << 'PY'
           from pathlib import Path
           import re
+
           p = Path("pubspec.yaml")
           t = p.read_text(encoding="utf-8")
+
           if "speech_to_text" not in t:
-              t = t.replace(
-                  "  audioplayers: ^6.1.0\n",
-                  "  audioplayers: ^6.1.0\n  speech_to_text: 6.6.2\n  permission_handler: ^11.3.1\n",
-              )
-          if "audioplayers:" not in t:
-              t = t.replace(
-                  "dependencies:\n",
-                  "dependencies:\n  audioplayers: 6.1.0\n",
-                  1,
-              )
-          if "assets/audio/meditation_ambient.mp3" not in t:
-              if "  assets:\n" in t:
-                  t = t.replace("  assets:\n", "  assets:\n    - assets/audio/meditation_ambient.mp3\n", 1)
+              if "audioplayers:" in t:
+                  t = re.sub(
+                      r"(audioplayers:\s*[^\n]+\n)",
+                      r"\1  speech_to_text: 6.6.2\n  permission_handler: 11.3.1\n",
+                      t,
+                      count=1,
+                  )
               else:
-                  t += "\nflutter:\n  assets:\n    - assets/audio/meditation_ambient.mp3\n"
-          t = re.sub(r"\n\s*-\s*assets/audio/(welcome_ambient|ai_ambient)\.wav\s*", "\n", t)
+                  t = t.replace(
+                      "dependencies:\n",
+                      "dependencies:\n  audioplayers: 6.1.0\n  speech_to_text: 6.6.2\n  permission_handler: 11.3.1\n",
+                      1,
+                  )
+
+          asset_entries = []
+          if Path("assets/audio/meditation_ambient.mp3").exists():
+              asset_entries.append("assets/audio/meditation_ambient.mp3")
+          long_name = "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
+          if Path(long_name).exists() and "assets/audio/meditation_ambient.mp3" not in asset_entries:
+              asset_entries.append(long_name)
+          if Path("assets/icon/liv_icon.png").exists():
+              asset_entries.append("assets/icon/liv_icon.png")
+
+          if not asset_entries:
+              raise SystemExit("ERROR: no audio/icon assets found for pubspec")
+
+          assets_block = "  assets:\n" + "".join(f"    - {a}\n" for a in asset_entries)
+
+          if re.search(r"(?m)^  assets:\n(?:    - .+\n)*", t):
+              t = re.sub(r"(?m)^  assets:\n(?:    - .+\n)*", assets_block, t, count=1)
+          elif re.search(r"(?m)^flutter:\n", t):
+              if "uses-material-design:" in t:
+                  t = re.sub(
+                      r"(?m)^(  uses-material-design:\s*\S+\n)",
+                      r"\1\n" + assets_block,
+                      t,
+                      count=1,
+                  )
+              else:
+                  t = re.sub(r"(?m)^(flutter:\n)", r"\1" + assets_block, t, count=1)
+          else:
+              t = t.rstrip() + "\n\nflutter:\n  uses-material-design: true\n" + assets_block
+
           t = re.sub(r"^version:.*$", "version: 1.4.8+17", t, count=1, flags=re.M)
           p.write_text(t, encoding="utf-8")
-          print("pubspec finalized")
+          print("pubspec finalized cleanly:")
+          print(p.read_text())
           PY
 
           if grep -n "AudioService.instance.stop" lib/screens/onboarding_screen.dart; then
