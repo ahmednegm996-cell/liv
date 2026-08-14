@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wire release or debug signing into android/app/build.gradle safely."""
+"""Wire release/debug signing + ndkVersion into android/app/build.gradle."""
 from pathlib import Path
 import re
 import sys
@@ -11,6 +11,12 @@ if not f.exists():
 
 t = f.read_text(encoding="utf-8")
 use_release = Path("android/app/liv-release.keystore").exists()
+
+# Force NDK version required by plugins
+if re.search(r"ndkVersion\s*=", t):
+    t = re.sub(r'ndkVersion\s*=\s*[^\n]+', 'ndkVersion = "26.1.10909125"', t)
+else:
+    t = re.sub(r'(android\s*\{)', r'\1\n    ndkVersion = "26.1.10909125"', t, count=1)
 
 # 1) Remove any existing signingConfigs { ... } block
 t = re.sub(
@@ -47,7 +53,6 @@ if use_release:
     )
     t = re.sub(r"(android[ \t]*\{)", r"\1" + block, t, count=1)
 
-    # 4) Add signingConfig inside buildTypes.release only
     m = re.search(r"(buildTypes[ \t]*\{[^{}]*release[ \t]*\{)", t, re.S)
     if m:
         t = t[: m.end()] + "\n            signingConfig = signingConfigs.release" + t[m.end() :]
@@ -68,7 +73,7 @@ else:
         t = t[: m.end()] + "\n            signingConfig = signingConfigs.debug" + t[m.end() :]
     print("Using debug signing for release")
 
-# 5) minify off
+# minify off
 t = re.sub(r"minifyEnabled[ \t]+[^\n]+", "minifyEnabled false", t)
 t = re.sub(r"shrinkResources[ \t]+[^\n]+", "shrinkResources false", t)
 if "minifyEnabled" not in t:
@@ -84,6 +89,6 @@ f.write_text(t, encoding="utf-8")
 print("--- relevant lines ---")
 for i, line in enumerate(f.read_text().splitlines(), 1):
     low = line.lower()
-    if any(k in low for k in ("signing", "release", "minify", "shrink", "buildtypes")):
+    if any(k in low for k in ("signing", "release", "minify", "shrink", "buildtypes", "ndk")):
         print(f"{i}: {line}")
 print("fix_signing.py done")
