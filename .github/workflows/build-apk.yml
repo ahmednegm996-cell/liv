@@ -45,7 +45,7 @@ jobs:
             echo "ERROR: zip missing lib/" && exit 1
           fi
 
-          # Always use full onboarding (6116049) — committed main is a simplified stub without gender/age/AI
+          # Always use full onboarding (6116049)
           mkdir -p lib/screens
           curl -fsSL -o lib/screens/onboarding_screen.dart \
             "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
@@ -70,6 +70,14 @@ jobs:
             echo "Applied feedback_patch"
           fi
 
+          # Meditation soundtrack: restore AudioService + wire onboarding/AI fade + mute
+          if [ -f ci/soundtrack_patch.py ]; then
+            curl -fsSL -o lib/services/audio_service.dart \
+              "https://raw.githubusercontent.com/ahmednegm996-cell/liv/main/lib/services/audio_service.dart" || true
+            python3 ci/soundtrack_patch.py || echo "WARNING: soundtrack_patch non-fatal"
+            echo "Applied soundtrack_patch"
+          fi
+
           # Verify critical markers
           grep -qE "male|female|CupertinoPicker|_tickAgeItem|_periodSection|trackPeriod" lib/screens/onboarding_screen.dart \
             && echo "UX markers OK" || echo "WARNING: UX markers missing"
@@ -86,6 +94,11 @@ jobs:
             find assets -type f | head -20
           fi
 
+          # Re-run soundtrack after assets restored so fallback copy works
+          if [ -f ci/soundtrack_patch.py ]; then
+            python3 ci/soundtrack_patch.py || true
+          fi
+
           # Pubspec: zip base + ensure speech/permission pins + audio assets
           if [ -f /tmp/liv_extract/pubspec.yaml ]; then
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
@@ -94,20 +107,24 @@ jobs:
           from pathlib import Path
           p = Path("pubspec.yaml")
           t = p.read_text(encoding="utf-8")
-          # Ensure critical deps
           if "speech_to_text" not in t:
               t = t.replace(
                   "  audioplayers: ^6.1.0\n",
                   "  audioplayers: ^6.1.0\n  speech_to_text: 6.6.2\n  permission_handler: ^11.3.1\n",
               )
-          if "assets/audio/ai_ambient.wav" not in t:
+          if "assets/audio/ai_ambient.wav" not in t and "assets/audio/" not in t:
               t = t.replace(
                   "  assets:\n",
-                  "  assets:\n    - assets/audio/welcome_ambient.wav\n    - assets/audio/ai_ambient.wav\n",
+                  "  assets:\n    - assets/audio/welcome_ambient.wav\n    - assets/audio/ai_ambient.wav\n    - assets/audio/meditation_ambient.mp3\n    - assets/audio/meditation_ambient.wav\n",
               )
-          # Bump version for this restore build
+          if "meditation_ambient" not in t:
+              t = t.replace(
+                  "  assets:\n",
+                  "  assets:\n    - assets/audio/meditation_ambient.mp3\n    - assets/audio/meditation_ambient.wav\n",
+                  1,
+              )
           import re
-          t = re.sub(r"^version:.*$", "version: 1.4.4+13", t, count=1, flags=re.M)
+          t = re.sub(r"^version:.*$", "version: 1.4.5+14", t, count=1, flags=re.M)
           p.write_text(t, encoding="utf-8")
           print("pubspec patched")
           print(p.read_text())
@@ -120,7 +137,6 @@ jobs:
       - name: Ensure Android project (prefer committed modern config)
         run: |
           set -e
-          # Backup dart + assets before any scaffold
           rm -rf /tmp/liv_lib_backup
           cp -a lib /tmp/liv_lib_backup
           cp pubspec.yaml /tmp/liv_pubspec_backup
@@ -134,7 +150,6 @@ jobs:
             flutter create --platforms=android --org com.liv --project-name liv_app . || true
           fi
 
-          # Always restore lib/assets after any create
           rm -rf lib
           cp -a /tmp/liv_lib_backup lib
           cp /tmp/liv_pubspec_backup pubspec.yaml
@@ -194,7 +209,6 @@ jobs:
                   if idx != -1:
                       gs.write_text(g[:idx] + method + g[idx:], encoding="utf-8")
 
-          # Force minify/shrink OFF so UI resources (fonts/icons) stay intact
           for f in [Path("android/app/build.gradle"), Path("android/app/build.gradle.kts")]:
               if not f.exists():
                   continue
@@ -237,7 +251,6 @@ jobs:
           text = re.sub(r'android:label="[^"]*"', 'android:label="LIV"', text, count=1)
           p.write_text(text, encoding="utf-8")
           print("Permissions + label OK")
-          print([line.strip() for line in p.read_text().splitlines() if "permission" in line or "label" in line][:10])
           PY
 
       - name: Bump Kotlin AGP Gradle if needed
@@ -245,7 +258,6 @@ jobs:
           if [ -f android/settings.gradle ]; then
             sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\11.9.22\2/' android/settings.gradle || true
             sed -i -E 's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' android/settings.gradle || true
-            cat android/settings.gradle || true
           fi
           if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
             sed -i -E 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' android/gradle/wrapper/gradle-wrapper.properties || true
@@ -260,7 +272,6 @@ jobs:
           if [ -f ci/ks.b64 ]; then
             base64 -d ci/ks.b64 > android/app/liv-release.keystore
             ls -la android/app/liv-release.keystore
-            # Validate keystore can actually be read (catches Invalid lenByte)
             if keytool -list -keystore android/app/liv-release.keystore -storepass liv2026secure -alias liv >/dev/null 2>&1; then
               echo "Keystore OK — using release signing"
               USE_RELEASE_SIGNING=1
