@@ -274,21 +274,21 @@ jobs:
               raise SystemExit(0)
           t = f.read_text(encoding="utf-8")
           if "liv-release.keystore" not in t and Path("android/app/liv-release.keystore").exists():
-              signing_block = '''
-    signingConfigs {
-        release {
-            def keystoreProperties = new Properties()
-            def keystorePropertiesFile = rootProject.file('key.properties')
-            if (keystorePropertiesFile.exists()) {
-                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-            }
-        }
-    }
-'''
+              signing_block = (
+                  "    signingConfigs {\n"
+                  "        release {\n"
+                  "            def keystoreProperties = new Properties()\n"
+                  "            def keystorePropertiesFile = rootProject.file('key.properties')\n"
+                  "            if (keystorePropertiesFile.exists()) {\n"
+                  "                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n"
+                  "                keyAlias keystoreProperties['keyAlias']\n"
+                  "                keyPassword keystoreProperties['keyPassword']\n"
+                  "                storeFile file(keystoreProperties['storeFile'])\n"
+                  "                storePassword keystoreProperties['storePassword']\n"
+                  "            }\n"
+                  "        }\n"
+                  "    }\n"
+              )
               if "signingConfigs" not in t:
                   t = t.replace("android {\n", "android {\n" + signing_block, 1)
               t = re.sub(
