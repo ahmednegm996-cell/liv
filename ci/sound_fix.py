@@ -30,13 +30,7 @@ write_wav(raw_dir / "liv_picker_tick.wav", 0.05, [(180, 0.75), (90, 0.55), (360,
 write_wav(raw_dir / "liv_button_click.wav", 0.035, [(520, 0.6), (780, 0.28), (260, 0.22)], 110)
 print("[sound_fix] WAVs written")
 
-main_candidates = list((ROOT / "android/app/src/main/kotlin").rglob("MainActivity.kt"))
-if not main_candidates:
-    print("[sound_fix] WARNING: MainActivity.kt not found")
-else:
-    main = main_candidates[0]
-    main.write_text(
-        Path("/dev/null").read_text() if False else open(__file__).read() and """package com.liv
+MAIN_KT = r'''package com.liv
 
 import android.media.AudioAttributes
 import android.media.SoundPool
@@ -115,8 +109,12 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 }
-""",
-        encoding="utf-8",
-    )
-    print(f"[sound_fix] wrote {main}")
+'''
+
+mains = list((ROOT / "android/app/src/main/kotlin").rglob("MainActivity.kt"))
+if not mains:
+    print("[sound_fix] WARNING: MainActivity.kt not found")
+else:
+    mains[0].write_text(MAIN_KT, encoding="utf-8")
+    print(f"[sound_fix] wrote {mains[0]}")
 print("sound_fix done")
