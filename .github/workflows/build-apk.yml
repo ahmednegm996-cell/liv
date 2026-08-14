@@ -92,8 +92,17 @@ jobs:
           if [ -f /tmp/liv_extract/pubspec.yaml ]; then
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
           fi
+
+          mkdir -p assets/audio
+          if [ -f ci/meditation_ambient.mp3.b64 ]; then
+            base64 -d ci/meditation_ambient.mp3.b64 > assets/audio/meditation_ambient.mp3
+            echo "Decoded meditation_ambient.mp3"
+            ls -la assets/audio/meditation_ambient.mp3
+          fi
+
           python3 << 'PY'
           from pathlib import Path
+          import re
           p = Path("pubspec.yaml")
           t = p.read_text(encoding="utf-8")
           if "speech_to_text" not in t:
@@ -101,16 +110,31 @@ jobs:
                   "  audioplayers: ^6.1.0\n",
                   "  audioplayers: ^6.1.0\n  speech_to_text: 6.6.2\n  permission_handler: ^11.3.1\n",
               )
-          if "meditation_ambient" not in t:
-              t = t.replace(
-                  "  assets:\n",
-                  "  assets:\n    - assets/audio/meditation_ambient.mp3\n    - assets/audio/meditation_ambient.wav\n    - assets/audio/welcome_ambient.wav\n    - assets/audio/ai_ambient.wav\n",
-                  1,
-              )
-          import re
-          t = re.sub(r"^version:.*$", "version: 1.4.6+15", t, count=1, flags=re.M)
+          asset_lines = []
+          for rel in [
+              "assets/audio/meditation_ambient.mp3",
+              "assets/audio/meditation_ambient.wav",
+              "assets/audio/welcome_ambient.wav",
+              "assets/audio/ai_ambient.wav",
+              "assets/icon/liv_icon.png",
+          ]:
+              if Path(rel).exists():
+                  asset_lines.append(f"    - {rel}")
+          for f in Path("assets").rglob("*"):
+              if f.is_file():
+                  rel = str(f).replace("\\", "/")
+                  line = f"    - {rel}"
+                  if line not in asset_lines:
+                      asset_lines.append(line)
+          if asset_lines and "assets:" in t:
+              block = "  assets:\n" + "\n".join(asset_lines) + "\n"
+              t = re.sub(r"  assets:\n(?:    - [^\n]+\n)*", block, t, count=1)
+              print("assets declared:", asset_lines)
+          else:
+              print("WARNING: no assets found or no assets: section")
+          t = re.sub(r"^version:.*$", "version: 1.4.7+16", t, count=1, flags=re.M)
           p.write_text(t, encoding="utf-8")
-          print("pubspec patched")
+          print("pubspec patched safely")
           PY
 
           test -f lib/main.dart || (echo "ERROR: main missing" && exit 1)
