@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
-class AudioService {
+class AudioService with WidgetsBindingObserver {
   AudioService._();
   static final AudioService instance = AudioService._();
 
@@ -13,14 +14,46 @@ class AudioService {
   double _targetVolume = 0.28;
   bool _muted = false;
   Timer? _fadeTimer;
+  bool _lifecycleAttached = false;
 
   bool get isMuted => _muted;
   bool get isPlaying => _player.state == PlayerState.playing;
   String? get currentAsset => _currentAsset;
 
+  /// Attach once from app root to stop music when app is backgrounded/closed.
+  void ensureLifecycleObserver() {
+    if (_lifecycleAttached) return;
+    _lifecycleAttached = true;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      unawaited(stop());
+    }
+  }
+
+  /// Age picker: deeper bass click (native).
   Future<void> tick() async {
     try {
       await _feedbackChannel.invokeMethod<void>('tick');
+      return;
+    } catch (_) {}
+    try {
+      await HapticFeedback.mediumImpact();
+    } catch (_) {}
+    try {
+      await SystemSound.play(SystemSoundType.click);
+    } catch (_) {}
+  }
+
+  /// Normal UI buttons: different, slightly lighter deep click.
+  Future<void> buttonClick() async {
+    try {
+      await _feedbackChannel.invokeMethod<void>('buttonClick');
       return;
     } catch (_) {}
     try {
@@ -38,10 +71,10 @@ class AudioService {
     Duration fadeDuration = const Duration(milliseconds: 1400),
   }) async {
     try {
+      ensureLifecycleObserver();
       _fadeTimer?.cancel();
       _targetVolume = volume.clamp(0.0, 1.0);
 
-      // Same track already active: keep position, no restart / no new fade-in.
       if (_currentAsset == assetPath &&
           (_player.state == PlayerState.playing ||
               _player.state == PlayerState.paused)) {
@@ -67,9 +100,7 @@ class AudioService {
       if (fadeIn && !_muted) {
         await _fadeTo(_targetVolume, fadeDuration);
       }
-    } catch (_) {
-      // Missing asset or platform limitation — stay silent
-    }
+    } catch (_) {}
   }
 
   Future<void> fadeOut({
@@ -119,6 +150,10 @@ class AudioService {
   }
 
   Future<void> dispose() async {
+    if (_lifecycleAttached) {
+      WidgetsBinding.instance.removeObserver(this);
+      _lifecycleAttached = false;
+    }
     _fadeTimer?.cancel();
     await _player.dispose();
   }
