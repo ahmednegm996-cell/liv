@@ -65,7 +65,6 @@ if "playLoop(" not in t:
         )
         changed = True
 
-# Fade-out when questions fully finish
 if "completeOnboarding" in t and "AudioService.instance.fadeOut" not in t:
     t2 = re.sub(
         r"((await\s+)?state\.completeOnboarding\([^;]*\);)",
@@ -77,7 +76,6 @@ if "completeOnboarding" in t and "AudioService.instance.fadeOut" not in t:
         t = t2
         changed = True
 
-# Do not stop on onboarding dispose
 t2 = re.sub(
     r"(void\s+dispose\s*\([^)]*\)\s*\{)\s*(try\s*\{\s*)?AudioService\.instance\.stop\(\);\s*(\}\s*catch\s*\([^)]*\)\s*\{\s*\})?",
     r"\1",
@@ -105,7 +103,7 @@ for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
             ch = True
     t2 = re.sub(
         r"AudioService\.instance\.playLoop\(\s*'[^']*'\s*(,\s*volume:\s*[0-9.]+)?\s*(,\s*fadeIn:\s*(true|false))?\s*\)",
-        f"AudioService.instance.playLoop('{ASSET}', volume: 0.55, fadeIn: true)",
+        f"AudioService.instance.playLoop('{ASSET}', volume: 0.85, fadeIn: true)",
         t,
     )
     if t2 != t:
@@ -139,5 +137,11 @@ for hp in Path("lib/screens").glob("*.dart"):
     if "AudioService.instance.tick()" in ht:
         hp.write_text(ht.replace("AudioService.instance.tick()", "AudioService.instance.buttonClick()"), encoding="utf-8")
         print("buttonClick wired:", hp)
+
+fp = Path("ci/feature_patch.py")
+if fp.exists():
+    import runpy
+    runpy.run_path(str(fp))
+    print("feature_patch applied")
 
 print("soundtrack_patch done OK")
