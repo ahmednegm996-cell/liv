@@ -47,7 +47,6 @@ if gs.exists():
         )
         print("Removed Keep growing / Keep going placeholder")
 
-    # Always refresh ADD instruction so multi-action rules stay current
     tag_block = (
         "لو المستخدم طلب أكثر من مهمة أو عادة في نفس الرسالة، اقسمها لعناصر منفصلة.\n"
         "لكل عنصر سطر منفصل في آخر الرد بالصيغة فقط:\n"
@@ -57,18 +56,9 @@ if gs.exists():
         "مثال: عايز أصلي وأذاكر وآكل → ثلاثة أسطر [ADD_TASK:أصلي] ثم [ADD_TASK:أذاكر] ثم [ADD_TASK:آكل].\n"
         "لا تدمج عناصر متعددة في سطر واحد. من غير شرح بعد أسطر الـADD.\n"
     )
-    if "ADD_GOOD" in g:
-        # replace existing inject block if present (keep prompt fresh)
-        g2 = re.sub(
-            r"لو المستخدم طلب[ء-يA-Za-z0-9\s،:\[\]_\.→\-]+من غير شرح بعد[^
-]*\n",
-            tag_block,
-            g,
-            count=1,
-        )
-        if g2 != g:
-            g = g2
-            print("Refreshed multi-action ADD_ instructions")
+
+    if "ADD_TASK:عنوان المهمة" in g:
+        print("Multi-action ADD_ instructions already present")
     elif "Future<String> chat(" in g:
         injected = False
         for old in [
