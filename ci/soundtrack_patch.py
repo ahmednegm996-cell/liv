@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-"""Wire meditation track into onboarding + AI. Continuity, fade on finish, higher AI volume."""
+"""Audio wiring + invoke feature_patch. AI volume 0.9 independent of onboarding 0.26."""
 from pathlib import Path
 import re
 import sys
+import runpy
+
+# Feature fixes first (personality, AI actions, l10n, circle) — independent of MP3
+fp = Path("ci/feature_patch.py")
+if fp.exists():
+    runpy.run_path(str(fp))
+    print("feature_patch applied")
+else:
+    print("WARNING: ci/feature_patch.py missing")
 
 ASSET = "assets/audio/meditation_ambient.mp3"
 LONG_ASSET = "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
@@ -91,6 +100,7 @@ if changed:
 else:
     print("Onboarding already OK")
 
+AI_VOL = "0.90"
 for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
     t = ai.read_text(encoding="utf-8")
     ch = False
@@ -103,9 +113,13 @@ for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
             ch = True
     t2 = re.sub(
         r"AudioService\.instance\.playLoop\(\s*'[^']*'\s*(,\s*volume:\s*[0-9.]+)?\s*(,\s*fadeIn:\s*(true|false))?\s*\)",
-        f"AudioService.instance.playLoop('{ASSET}', volume: 0.85, fadeIn: true)",
+        f"AudioService.instance.playLoop('{ASSET}', volume: {AI_VOL}, fadeIn: true)",
         t,
     )
+    if t2 != t:
+        t = t2
+        ch = True
+    t2 = re.sub(r"(playLoop\([^)]*volume:\s*)0\.\d+", rf"\g<1>{AI_VOL}", t)
     if t2 != t:
         t = t2
         ch = True
@@ -117,7 +131,7 @@ for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
         ch = True
     if ch:
         ai.write_text(t, encoding="utf-8")
-        print("AI updated:", ai)
+        print("AI audio volume →", AI_VOL, ai)
 
 rp = Path("lib/screens/root_shell.dart")
 if rp.exists():
@@ -137,11 +151,5 @@ for hp in Path("lib/screens").glob("*.dart"):
     if "AudioService.instance.tick()" in ht:
         hp.write_text(ht.replace("AudioService.instance.tick()", "AudioService.instance.buttonClick()"), encoding="utf-8")
         print("buttonClick wired:", hp)
-
-fp = Path("ci/feature_patch.py")
-if fp.exists():
-    import runpy
-    runpy.run_path(str(fp))
-    print("feature_patch applied")
 
 print("soundtrack_patch done OK")
