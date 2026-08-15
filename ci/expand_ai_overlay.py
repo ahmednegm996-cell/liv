@@ -7,20 +7,26 @@ import sys
 ROOT = Path(__file__).resolve().parent
 out_root = ROOT / "overlays" / "lib"
 
-def write(rel: str, b64_name: str):
-    b64_path = ROOT / b64_name
-    if not b64_path.exists():
-        print(f"expand_ai_overlay: missing {b64_path}")
-        return False
-    data = base64.b64decode(b64_path.read_text().strip())
+def load_b64(stem: str) -> bytes:
+    full = ROOT / f"{stem}.b64"
+    if full.exists():
+        return base64.b64decode(full.read_text().strip())
+    p1 = ROOT / f"{stem}.b64.part1"
+    p2 = ROOT / f"{stem}.b64.part2"
+    if p1.exists() and p2.exists():
+        return base64.b64decode((p1.read_text() + p2.read_text()).replace("\n", "").strip())
+    raise FileNotFoundError(stem)
+
+def write(rel: str, stem: str):
+    data = load_b64(stem)
     dest = out_root / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(data)
-    print(f"expand_ai_overlay: wrote {dest} ({len(data)} bytes)")
-    return True
+    lib_dest = Path("lib") / rel
+    lib_dest.parent.mkdir(parents=True, exist_ok=True)
+    lib_dest.write_bytes(data)
+    print(f"expand_ai_overlay: wrote {dest} and {lib_dest} ({len(data)} bytes)")
 
-ok1 = write("services/gemini_service.dart", "gemini_overlay.b64")
-ok2 = write("screens/ai_chat_screen.dart", "ai_chat_overlay.b64")
-if not (ok1 and ok2):
-    sys.exit(1)
+write("services/gemini_service.dart", "gemini_overlay")
+write("screens/ai_chat_screen.dart", "ai_chat_overlay")
 print("expand_ai_overlay done")

@@ -2,20 +2,19 @@
 """Apply AI features that survive ZIP restore."""
 from pathlib import Path
 import runpy
-import re
 
 ROOT = Path(".")
 ci = ROOT / "ci"
 
-# Write full AI sources over ZIP copies
-for script in ("write_gemini_overlay.py", "write_ai_overlay.py"):
-    p = ci / script
-    if p.exists():
-        runpy.run_path(str(p))
-    else:
-        print(f"WARNING: missing {p}")
+exp = ci / "expand_ai_overlay.py"
+if exp.exists():
+    runpy.run_path(str(exp))
+else:
+    for script in ("write_gemini_overlay.py", "write_ai_overlay.py"):
+        p = ci / script
+        if p.exists():
+            runpy.run_path(str(p))
 
-# l10n goals → أحلام
 l10n = ROOT / "lib/services/l10n.dart"
 if l10n.exists():
     t = l10n.read_text(encoding="utf-8")
@@ -37,7 +36,6 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n} replacements")
 
-# Progress circle
 home = ROOT / "lib/screens/home_screen.dart"
 if home.exists():
     t = home.read_text(encoding="utf-8")
@@ -63,7 +61,6 @@ if home.exists():
         home.write_text(t.replace(old, new, 1), encoding="utf-8")
         print("home: circle 70→80")
 
-# Final hard check
 g = (ROOT / "lib/services/gemini_service.dart").read_text(encoding="utf-8")
 if "Keep growing with LIV" in g:
     raise SystemExit("ERROR: Keep growing placeholder still present")
