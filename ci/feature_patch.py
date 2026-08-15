@@ -47,16 +47,29 @@ if gs.exists():
         )
         print("Removed Keep growing / Keep going placeholder")
 
-    if "ADD_GOOD" not in g and "Future<String> chat(" in g:
-        tag_block = (
-            "لو المستخدم طلب عادة كويسة او عادة وحشة او مهمة بشكل واضح، اضف في اخر الرد سطر واحد فقط بالصيغة:\n"
-            "[ADD_GOOD:اسم العادة]\n"
-            "او\n"
-            "[ADD_BAD:اسم العادة]\n"
-            "او\n"
-            "[ADD_TASK:عنوان المهمة]\n"
-            "من غير شرح بعد السطر ده.\n"
+    # Always refresh ADD instruction so multi-action rules stay current
+    tag_block = (
+        "لو المستخدم طلب أكثر من مهمة أو عادة في نفس الرسالة، اقسمها لعناصر منفصلة.\n"
+        "لكل عنصر سطر منفصل في آخر الرد بالصيغة فقط:\n"
+        "[ADD_TASK:عنوان المهمة]\n"
+        "[ADD_GOOD:اسم العادة الجيدة]\n"
+        "[ADD_BAD:اسم العادة السيئة]\n"
+        "مثال: عايز أصلي وأذاكر وآكل → ثلاثة أسطر [ADD_TASK:أصلي] ثم [ADD_TASK:أذاكر] ثم [ADD_TASK:آكل].\n"
+        "لا تدمج عناصر متعددة في سطر واحد. من غير شرح بعد أسطر الـADD.\n"
+    )
+    if "ADD_GOOD" in g:
+        # replace existing inject block if present (keep prompt fresh)
+        g2 = re.sub(
+            r"لو المستخدم طلب[ء-يA-Za-z0-9\s،:\[\]_\.→\-]+من غير شرح بعد[^
+]*\n",
+            tag_block,
+            g,
+            count=1,
         )
+        if g2 != g:
+            g = g2
+            print("Refreshed multi-action ADD_ instructions")
+    elif "Future<String> chat(" in g:
         injected = False
         for old in [
             "رد بهدوء ووضوح.\n''');",
@@ -66,14 +79,13 @@ if gs.exists():
             if old in g:
                 g = g.replace(old, "رد بهدوء ووضوح.\n" + tag_block + "''');", 1)
                 injected = True
-                print("Injected ADD_ tags into chat prompt")
+                print("Injected multi-action ADD_ tags into chat prompt")
                 break
         if not injected and "رد بهدوء ووضوح." in g:
             g = g.replace("رد بهدوء ووضوح.", "رد بهدوء ووضوح.\n" + tag_block, 1)
-            print("Injected ADD_ tags (fallback)")
+            print("Injected multi-action ADD_ tags (fallback)")
 
     if "personalityInsight" not in g:
-        # Use Dart triple-quoted string so newlines are valid
         method = (
             "\n"
             "  Future<String> personalityInsight({required String profileSummary}) {\n"
@@ -110,7 +122,6 @@ if gs.exists():
         raise SystemExit("ERROR: personalityInsight still missing after inject")
     if "Keep growing with LIV" in final or "Keep going!" in final:
         raise SystemExit("ERROR: placeholder still present")
-    # quick syntax sanity: no broken single-quote strings from old inject
     if "Liv.\n'" in final or "سطر):\n'" in final:
         raise SystemExit("ERROR: broken string literals detected in gemini_service.dart")
     print("gemini_service.dart OK")
