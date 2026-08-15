@@ -6,14 +6,12 @@ import runpy
 ROOT = Path(".")
 ci = ROOT / "ci"
 
-exp = ci / "expand_ai_overlay.py"
-if exp.exists():
-    runpy.run_path(str(exp))
-else:
-    for script in ("write_gemini_overlay.py", "write_ai_overlay.py"):
-        p = ci / script
-        if p.exists():
-            runpy.run_path(str(p))
+for script in ("write_gemini_overlay.py", "write_ai_overlay.py"):
+    p = ci / script
+    if p.exists():
+        runpy.run_path(str(p))
+    else:
+        print(f"WARNING: missing {p}")
 
 l10n = ROOT / "lib/services/l10n.dart"
 if l10n.exists():
