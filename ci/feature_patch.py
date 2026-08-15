@@ -15,7 +15,7 @@ PERSONALITY_METHOD = r'''
       '- نقاط تحتاج تحسين\n'
       '- عادة واحدة مقترحة\n'
       '- جملة تحفيزية قصيرة\n\n'
-      'الملخص:\n$profileSummary\n\n'
+      'الملخص:\n' + profileSummary + '\n\n'
       'لا تستخدم Markdown. كن صادق ومفيد.',
     );
   }
