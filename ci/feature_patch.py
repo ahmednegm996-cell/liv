@@ -40,7 +40,6 @@ if gs.exists():
             "",
             g,
         )
-        # also handle the stub form: String personalityInsight(...)
         g = re.sub(
             r"String\s+personalityInsight\s*\([\s\S]*?Keep going![\s\S]*?\n  \}",
             "",
@@ -67,30 +66,33 @@ if gs.exists():
             if old in g:
                 g = g.replace(old, "رد بهدوء ووضوح.\n" + tag_block + "''');", 1)
                 injected = True
-                print(f"Injected ADD_ tags into chat prompt")
+                print("Injected ADD_ tags into chat prompt")
                 break
         if not injected and "رد بهدوء ووضوح." in g:
             g = g.replace("رد بهدوء ووضوح.", "رد بهدوء ووضوح.\n" + tag_block, 1)
             print("Injected ADD_ tags (fallback)")
 
     if "personalityInsight" not in g:
-        # Insert a real AI-backed personalityInsight before the final class closing brace
-        method = '''
-  Future<String> personalityInsight({required String profileSummary}) {
-    return generateText(
-      'انت محلل شخصية هادئ وواقعي لتطبيق Liv.\n'
-      'بناء على ملخص المستخدم التالي اكتب تحليل شخصية مختصر وواضح بالعامية المصرية (8-12 سطر):\n'
-      '- نمط الشخصية العام\n'
-      '- نقاط القوة\n'
-      '- نقاط تحتاج تحسين\n'
-      '- عادة واحدة مقترحة\n'
-      '- جملة تحفيزية قصيرة\n\n'
-      'الملخص:\n' + profileSummary + '\n\n'
-      'لا تستخدم Markdown. كن صادق ومفيد.',
-    );
-  }
-'''
-        # Insert before the last closing brace of the class
+        # Use Dart triple-quoted string so newlines are valid
+        method = (
+            "\n"
+            "  Future<String> personalityInsight({required String profileSummary}) {\n"
+            "    return generateText('''\n"
+            "انت محلل شخصية هادئ وواقعي لتطبيق Liv.\n"
+            "بناء على ملخص المستخدم التالي اكتب تحليل شخصية مختصر وواضح بالعامية المصرية (8-12 سطر):\n"
+            "- نمط الشخصية العام\n"
+            "- نقاط القوة\n"
+            "- نقاط تحتاج تحسين\n"
+            "- عادة واحدة مقترحة\n"
+            "- جملة تحفيزية قصيرة\n"
+            "\n"
+            "الملخص:\n"
+            "$profileSummary\n"
+            "\n"
+            "لا تستخدم Markdown. كن صادق ومفيد.\n"
+            "''');\n"
+            "  }\n"
+        )
         last = g.rstrip()
         if last.endswith("}"):
             g = last[:-1] + method + "}\n"
@@ -103,12 +105,14 @@ if gs.exists():
 
     gs.write_text(g, encoding="utf-8")
 
-    # final sanity
     final = gs.read_text(encoding="utf-8")
     if "personalityInsight" not in final:
         raise SystemExit("ERROR: personalityInsight still missing after inject")
     if "Keep growing with LIV" in final or "Keep going!" in final:
         raise SystemExit("ERROR: placeholder still present")
+    # quick syntax sanity: no broken single-quote strings from old inject
+    if "Liv.\n'" in final or "سطر):\n'" in final:
+        raise SystemExit("ERROR: broken string literals detected in gemini_service.dart")
     print("gemini_service.dart OK")
 
 # 3) l10n dreams -> أحلام
@@ -137,24 +141,28 @@ if l10n.exists():
 home = lib / "screens/home_screen.dart"
 if home.exists():
     t = home.read_text(encoding="utf-8")
-    old = """                  SizedBox(
-                    width: 70,
-                    height: 70,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 6,"""
-    new = """                  SizedBox(
-                    width: 80,
-                    height: 80,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 6.5,"""
+    old = (
+        "                  SizedBox(\n"
+        "                    width: 70,\n"
+        "                    height: 70,\n"
+        "                    child: Stack(\n"
+        "                      alignment: Alignment.center,\n"
+        "                      children: [\n"
+        "                        CircularProgressIndicator(\n"
+        "                          value: progress,\n"
+        "                          strokeWidth: 6,"
+    )
+    new = (
+        "                  SizedBox(\n"
+        "                    width: 80,\n"
+        "                    height: 80,\n"
+        "                    child: Stack(\n"
+        "                      alignment: Alignment.center,\n"
+        "                      children: [\n"
+        "                        CircularProgressIndicator(\n"
+        "                          value: progress,\n"
+        "                          strokeWidth: 6.5,"
+    )
     if old in t:
         home.write_text(t.replace(old, new, 1), encoding="utf-8")
         print("home: circle 70→80")
