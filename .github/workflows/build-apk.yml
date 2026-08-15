@@ -132,8 +132,6 @@ jobs:
           from pathlib import Path
           import re, textwrap
 
-          # Canonical Gaps lives ONLY in widgets/common.dart
-          # ZIP app_theme.dart also defines Gaps → remove it to avoid import collision
           theme = Path("lib/theme/app_theme.dart")
           if theme.exists():
               tt = theme.read_text(encoding="utf-8")
@@ -174,11 +172,36 @@ jobs:
           gs = Path("lib/services/gemini_service.dart")
           if gs.exists():
               g = gs.read_text(encoding="utf-8")
+              if "Keep growing with LIV" in g:
+                  g = re.sub(
+                      r"Future<String>\s+personalityInsight[\s\S]*?Keep growing with LIV![\s\S]*?\n  \}",
+                      "",
+                      g,
+                  )
               if "personalityInsight" not in g:
-                  method = "\n  Future<String> personalityInsight({required String profileSummary}) {\n    return Future.value('Keep growing with LIV!');\n  }\n"
+                  method = """
+  Future<String> personalityInsight({required String profileSummary}) {
+    return generateText(
+      'انت محلل شخصية هادئ وواقعي لتطبيق Liv.\n'
+      'بناء على ملخص المستخدم التالي اكتب تحليل شخصية مختصر وواضح بالعامية المصرية (8-12 سطر):\n'
+      '- نمط الشخصية العام\n'
+      '- نقاط القوة\n'
+      '- نقاط تحتاج تحسين\n'
+      '- عادة واحدة مقترحة\n'
+      '- جملة تحفيزية قصيرة\n\n'
+      'الملخص:\n' + profileSummary + '\n\n'
+      'لا تستخدم Markdown. كن صادق ومفيد.',
+    );
+  }
+"""
                   idx = g.rfind("}")
                   if idx != -1:
-                      gs.write_text(g[:idx] + method + g[idx:], encoding="utf-8")
+                      g = g[:idx] + method + g[idx:]
+                  gs.write_text(g, encoding="utf-8")
+                  print("personalityInsight real method ensured")
+              else:
+                  gs.write_text(g, encoding="utf-8")
+                  print("personalityInsight already present")
           for f in [Path("android/app/build.gradle"), Path("android/app/build.gradle.kts")]:
               if not f.exists():
                   continue
