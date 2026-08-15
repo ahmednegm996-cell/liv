@@ -16,14 +16,16 @@ class _AIChatScreenState extends State<AIChatScreen> {
   final _scroll = ScrollController();
   final List<Map<String, String>> _messages = [];
   bool _sending = false;
-  Map<String, String>? _pendingAction;
+  List<Map<String, String>> _pendingActions = [];
   bool _historyLoaded = false;
+
+  static const _asset = 'assets/audio/meditation_ambient.mp3';
 
   @override
   void initState() {
     super.initState();
     if (widget.active) {
-      AudioService.instance.playLoop('assets/audio/meditation_ambient.mp3', volume: 0.90);
+      AudioService.instance.playLoop(_asset, volume: AudioService.meditationVolume);
     }
   }
 
@@ -31,7 +33,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
   void didUpdateWidget(covariant AIChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.active && !oldWidget.active) {
-      AudioService.instance.playLoop('assets/audio/meditation_ambient.mp3', volume: 0.90);
+      AudioService.instance.playLoop(_asset, volume: AudioService.meditationVolume);
     } else if (!widget.active && oldWidget.active) {
       AudioService.instance.fadeOut(duration: const Duration(milliseconds: 1200));
     }
@@ -73,19 +75,24 @@ class _AIChatScreenState extends State<AIChatScreen> {
     });
   }
 
-  Map<String, String>? _parseAddTag(String reply) {
-    final m = RegExp(r'\[ADD_(GOOD|BAD|TASK):([^\]]+)\]').firstMatch(reply);
-    if (m == null) return null;
-    return {'type': m.group(1)!, 'name': m.group(2)!.trim()};
+  List<Map<String, String>> _parseAddTags(String reply) {
+    final out = <Map<String, String>>[];
+    final re = RegExp(r'\[ADD_(GOOD|BAD|TASK):([^\]]+)\]');
+    for (final m in re.allMatches(reply)) {
+      final name = m.group(2)!.trim();
+      if (name.isEmpty) continue;
+      // dedupe by type+name
+      if (out.any((a) => a['type'] == m.group(1)! && a['name'] == name)) continue;
+      out.add({'type': m.group(1)!, 'name': name});
+    }
+    return out;
   }
 
-  String _stripAddTag(String reply) {
-    return reply.replaceAll(RegExp(r'\s*\[ADD_(GOOD|BAD|TASK):[^\]]+\]\s*'), '').trim();
+  String _stripAddTags(String reply) {
+    return reply.replaceAll(RegExp(r'\s*\[ADD_(GOOD|BAD|TASK):[^\]]+\]\s*'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  Future<void> _applyPendingAction() async {
-    final action = _pendingAction;
-    if (action == null) return;
+  Future<void> _applyAction(Map<String, String> action) async {
     final state = context.read<AppState>();
     final name = action['name'] ?? '';
     if (name.isEmpty) return;
@@ -100,7 +107,9 @@ class _AIChatScreenState extends State<AIChatScreen> {
       }
       if (!mounted) return;
       setState(() {
-        _pendingAction = null;
+        _pendingActions.removeWhere(
+          (a) => a['type'] == action['type'] && a['name'] == action['name'],
+        );
         final msg = type == 'TASK'
             ? 'تمت إضافة "$name" إلى المهام ✓'
             : type == 'BAD'
@@ -137,7 +146,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
       _messages.add({'role': 'user', 'text': text});
       _input.clear();
       _sending = true;
-      _pendingAction = null;
+      _pendingActions = [];
     });
     _scrollToEnd();
     await _persist();
@@ -151,12 +160,12 @@ class _AIChatScreenState extends State<AIChatScreen> {
             .map((m) => {'role': m['role']!, 'text': m['text'] ?? ''})
             .toList(),
       );
-      final action = _parseAddTag(reply);
-      final clean = _stripAddTag(reply);
+      final actions = _parseAddTags(reply);
+      final clean = _stripAddTags(reply);
       if (!mounted) return;
       setState(() {
         _messages.add({'role': 'assistant', 'text': clean});
-        _pendingAction = action;
+        _pendingActions = actions;
         _sending = false;
       });
       await _persist();
@@ -168,6 +177,14 @@ class _AIChatScreenState extends State<AIChatScreen> {
         _sending = false;
       });
     }
+  }
+
+  String _chipLabel(Map<String, String> a) {
+    final name = a['name'] ?? '';
+    final type = a['type'];
+    if (type == 'TASK') return 'إضافة "$name" للمهام';
+    if (type == 'BAD') return 'إضافة "$name" للعادات السيئة';
+    return 'إضافة "$name" للعادات الجيدة';
   }
 
   @override
@@ -210,22 +227,19 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
                     ),
                   ),
-                if (_pendingAction != null)
+                if (_pendingActions.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: ActionChip(
-                        avatar: const Icon(Icons.add_task, size: 18),
-                        label: Text(
-                          _pendingAction!['type'] == 'TASK'
-                              ? 'إضافة إلى المهام اليومية'
-                              : _pendingAction!['type'] == 'BAD'
-                                  ? 'إضافة إلى العادات السيئة'
-                                  : 'إضافة إلى العادات الجيدة',
-                        ),
-                        onPressed: _applyPendingAction,
-                      ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _pendingActions.map((a) {
+                        return ActionChip(
+                          avatar: const Icon(Icons.add_task, size: 18),
+                          label: Text(_chipLabel(a), style: const TextStyle(fontSize: 13)),
+                          onPressed: () => _applyAction(a),
+                        );
+                      }).toList(),
                     ),
                   ),
               ],
