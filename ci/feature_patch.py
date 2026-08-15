@@ -28,13 +28,12 @@ if src.exists() and src.stat().st_size > 500 and "addHabit" in src.read_text(enc
 else:
     print(f"WARNING: ai_chat overlay missing or incomplete — {src}")
 
-# 2) Gemini: keep ZIP implementation (has all methods + real personalityInsight),
-#    only inject the ADD_ tag instruction into the chat prompt if missing.
+# 2) Gemini: keep ZIP full implementation (all methods + real personalityInsight).
+#    Only inject the ADD_ tag instruction into the chat prompt if missing.
 gs = lib / "services/gemini_service.dart"
 if gs.exists():
     g = gs.read_text(encoding="utf-8")
     if "Keep growing with LIV" in g:
-        # strip any old placeholder if present
         g = re.sub(
             r"Future<String>\s+personalityInsight[\s\S]*?Keep growing with LIV![\s\S]*?\n  \}",
             "",
@@ -42,7 +41,6 @@ if gs.exists():
         )
         print("Removed Keep growing placeholder")
     if "ADD_GOOD" not in g and "Future<String> chat(" in g:
-        # inject after the normal reply instruction
         tag_block = (
             "لو المستخدم طلب عادة كويسة او عادة وحشة او مهمة بشكل واضح، اضف في اخر الرد سطر واحد فقط بالصيغة:\n"
             "[ADD_GOOD:اسم العادة]\n"
@@ -52,24 +50,34 @@ if gs.exists():
             "[ADD_TASK:عنوان المهمة]\n"
             "من غير شرح بعد السطر ده.\n"
         )
-        # place before the closing of the generateText string in chat
-        if "رد بهدوء ووضوح." in g:
-            g = g.replace(
-                "رد بهدوء ووضوح.\n''');",
-                "رد بهدوء ووضوح.\n" + tag_block + "''');",
-                1,
-            )
-            print("Injected ADD_ tags into chat prompt")
-        elif "رد بهدوء ووضوح." in g:
-            g = g.replace("رد بهدوء ووضوح.", "رد بهدوء ووضوح.\n" + tag_block, 1)
-            print("Injected ADD_ tags (alt)")
+        injected = False
+        # Common ZIP ending of the chat prompt string
+        for old in [
+            "رد بهدوء ووضوح.\n''');",
+            "رد بهدوء ووضوح.\n\"\"\");",
+            "رد بهدوء ووضوح.''');",
+            "رد بهدوء ووضوح.",
+        ]:
+            if old in g:
+                g = g.replace(old, "رد بهدوء ووضوح.\n" + tag_block + ("''');" if old.endswith("''');") else ""), 1)
+                injected = True
+                print(f"Injected ADD_ tags into chat prompt (matched: {old[:20]}...)")
+                break
+        if not injected:
+            # last resort: append before the closing of chat method
+            m = re.search(r"(Future<String>\s+chat\([\s\S]*?return generateText\(['\"]{1,3})([\s\S]*?)(['\"]{1,3}\);)", g)
+            if m:
+                g = g[:m.end(2)] + "\n" + tag_block + g[m.end(2):]
+                print("Injected ADD_ tags via regex")
+            else:
+                print("WARNING: could not locate chat prompt to inject ADD_ tags")
     if "personalityInsight" not in g:
         print("WARNING: personalityInsight still missing")
     else:
         print("personalityInsight present")
     gs.write_text(g, encoding="utf-8")
 
-# 3) l10n dreams -> أحلام (keep existing behaviour)
+# 3) l10n dreams -> أحلام
 l10n = lib / "services/l10n.dart"
 if l10n.exists():
     t = l10n.read_text(encoding="utf-8")
@@ -91,7 +99,7 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home circle (keep existing)
+# 4) home circle
 home = lib / "screens/home_screen.dart"
 if home.exists():
     t = home.read_text(encoding="utf-8")
