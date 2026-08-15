@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Audio wiring + invoke feature_patch. AI volume 0.9 independent of onboarding 0.26."""
+"""Audio wiring + invoke feature_patch. One consistent meditation volume."""
 from pathlib import Path
 import re
 import sys
 import runpy
 
-# Feature fixes first (personality, AI actions, l10n, circle) — independent of MP3
 fp = Path("ci/feature_patch.py")
 if fp.exists():
     runpy.run_path(str(fp))
@@ -15,6 +14,8 @@ else:
 
 ASSET = "assets/audio/meditation_ambient.mp3"
 LONG_ASSET = "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
+# Must match AudioService.meditationVolume
+MED_VOL = "0.85"
 
 Path("assets/audio").mkdir(parents=True, exist_ok=True)
 canonical = Path(ASSET)
@@ -64,11 +65,20 @@ if "audio_service.dart" not in t:
         t = "import '../services/audio_service.dart';\n" + t
     changed = True
 
-if "playLoop(" not in t:
+# Force consistent volume on any playLoop in onboarding
+t2 = re.sub(
+    r"AudioService\.instance\.playLoop\(\s*'[^']*'\s*(,\s*volume:\s*[0-9.]+)?\s*(,\s*fadeIn:\s*(true|false))?\s*\)",
+    f"AudioService.instance.playLoop('{ASSET}', volume: {MED_VOL}, fadeIn: true)",
+    t,
+)
+if t2 != t:
+    t = t2
+    changed = True
+elif "playLoop(" not in t:
     if re.search(r"void\s+initState\s*\(\s*\)\s*\{", t):
         t = re.sub(
             r"(void\s+initState\s*\(\s*\)\s*\{\s*super\.initState\(\);)",
-            r"\1\n    AudioService.instance.playLoop(\n      '" + ASSET + r"',\n      volume: 0.26,\n      fadeIn: true,\n    );",
+            r"\1\n    AudioService.instance.playLoop(\n      '" + ASSET + r"',\n      volume: " + MED_VOL + r",\n      fadeIn: true,\n    );",
             t,
             count=1,
         )
@@ -96,11 +106,10 @@ if t2 != t:
 
 if changed:
     ob.write_text(t, encoding="utf-8")
-    print("Onboarding updated")
+    print("Onboarding updated volume", MED_VOL)
 else:
     print("Onboarding already OK")
 
-AI_VOL = "0.90"
 for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
     t = ai.read_text(encoding="utf-8")
     ch = False
@@ -113,13 +122,13 @@ for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
             ch = True
     t2 = re.sub(
         r"AudioService\.instance\.playLoop\(\s*'[^']*'\s*(,\s*volume:\s*[0-9.]+)?\s*(,\s*fadeIn:\s*(true|false))?\s*\)",
-        f"AudioService.instance.playLoop('{ASSET}', volume: {AI_VOL}, fadeIn: true)",
+        f"AudioService.instance.playLoop('{ASSET}', volume: {MED_VOL}, fadeIn: true)",
         t,
     )
     if t2 != t:
         t = t2
         ch = True
-    t2 = re.sub(r"(playLoop\([^)]*volume:\s*)0\.\d+", rf"\g<1>{AI_VOL}", t)
+    t2 = re.sub(r"(playLoop\([^)]*volume:\s*)0\.\d+", rf"\g<1>{MED_VOL}", t)
     if t2 != t:
         t = t2
         ch = True
@@ -131,7 +140,7 @@ for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
         ch = True
     if ch:
         ai.write_text(t, encoding="utf-8")
-        print("AI audio volume →", AI_VOL, ai)
+        print("AI audio volume →", MED_VOL, ai)
 
 rp = Path("lib/screens/root_shell.dart")
 if rp.exists():
