@@ -9,9 +9,12 @@ class AudioService with WidgetsBindingObserver {
 
   static const MethodChannel _feedbackChannel = MethodChannel('liv.feedback');
 
+  /// Single shared volume for the meditation background track everywhere.
+  static const double meditationVolume = 0.85;
+
   final AudioPlayer _player = AudioPlayer();
   String? _currentAsset;
-  double _targetVolume = 0.28;
+  double _targetVolume = meditationVolume;
   bool _muted = false;
   Timer? _fadeTimer;
   bool _lifecycleAttached = false;
@@ -20,7 +23,6 @@ class AudioService with WidgetsBindingObserver {
   bool get isPlaying => _player.state == PlayerState.playing;
   String? get currentAsset => _currentAsset;
 
-  /// Attach once from app root to stop music when app is backgrounded/closed.
   void ensureLifecycleObserver() {
     if (_lifecycleAttached) return;
     _lifecycleAttached = true;
@@ -36,7 +38,7 @@ class AudioService with WidgetsBindingObserver {
     }
   }
 
-  /// Age picker: deeper bass click (native).
+  /// Age picker: deeper bass tick (native).
   Future<void> tick() async {
     try {
       await _feedbackChannel.invokeMethod<void>('tick');
@@ -50,7 +52,7 @@ class AudioService with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  /// Normal UI buttons: different, slightly lighter deep click.
+  /// Normal UI buttons: lighter premium click (native).
   Future<void> buttonClick() async {
     try {
       await _feedbackChannel.invokeMethod<void>('buttonClick');
@@ -66,14 +68,15 @@ class AudioService with WidgetsBindingObserver {
 
   Future<void> playLoop(
     String assetPath, {
-    double volume = 0.28,
+    double? volume,
     bool fadeIn = true,
     Duration fadeDuration = const Duration(milliseconds: 1400),
   }) async {
     try {
       ensureLifecycleObserver();
       _fadeTimer?.cancel();
-      _targetVolume = volume.clamp(0.0, 1.0);
+      final vol = (volume ?? meditationVolume).clamp(0.0, 1.0);
+      _targetVolume = vol;
 
       if (_currentAsset == assetPath &&
           (_player.state == PlayerState.playing ||
