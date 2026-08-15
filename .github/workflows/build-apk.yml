@@ -178,30 +178,12 @@ jobs:
                       "",
                       g,
                   )
+                  gs.write_text(g, encoding="utf-8")
+                  print("Removed Keep growing placeholder")
               if "personalityInsight" not in g:
-                  method = """
-  Future<String> personalityInsight({required String profileSummary}) {
-    return generateText(
-      'انت محلل شخصية هادئ وواقعي لتطبيق Liv.\n'
-      'بناء على ملخص المستخدم التالي اكتب تحليل شخصية مختصر وواضح بالعامية المصرية (8-12 سطر):\n'
-      '- نمط الشخصية العام\n'
-      '- نقاط القوة\n'
-      '- نقاط تحتاج تحسين\n'
-      '- عادة واحدة مقترحة\n'
-      '- جملة تحفيزية قصيرة\n\n'
-      'الملخص:\n' + profileSummary + '\n\n'
-      'لا تستخدم Markdown. كن صادق ومفيد.',
-    );
-  }
-"""
-                  idx = g.rfind("}")
-                  if idx != -1:
-                      g = g[:idx] + method + g[idx:]
-                  gs.write_text(g, encoding="utf-8")
-                  print("personalityInsight real method ensured")
+                  print("WARNING: personalityInsight missing — feature_patch should have added it")
               else:
-                  gs.write_text(g, encoding="utf-8")
-                  print("personalityInsight already present")
+                  print("personalityInsight present")
           for f in [Path("android/app/build.gradle"), Path("android/app/build.gradle.kts")]:
               if not f.exists():
                   continue
