@@ -28,18 +28,26 @@ if src.exists() and src.stat().st_size > 500 and "addHabit" in src.read_text(enc
 else:
     print(f"WARNING: ai_chat overlay missing or incomplete — {src}")
 
-# 2) Gemini: keep ZIP full implementation (all methods + real personalityInsight).
-#    Only inject the ADD_ tag instruction into the chat prompt if missing.
+# 2) Gemini: keep ZIP full implementation.
+#    Inject ADD_ tags into chat prompt + ensure real personalityInsight exists.
 gs = lib / "services/gemini_service.dart"
 if gs.exists():
     g = gs.read_text(encoding="utf-8")
+
     if "Keep growing with LIV" in g:
         g = re.sub(
             r"Future<String>\s+personalityInsight[\s\S]*?Keep growing with LIV![\s\S]*?\n  \}",
             "",
             g,
         )
-        print("Removed Keep growing placeholder")
+        # also handle the stub form: String personalityInsight(...)
+        g = re.sub(
+            r"String\s+personalityInsight\s*\([\s\S]*?Keep going![\s\S]*?\n  \}",
+            "",
+            g,
+        )
+        print("Removed Keep growing / Keep going placeholder")
+
     if "ADD_GOOD" not in g and "Future<String> chat(" in g:
         tag_block = (
             "لو المستخدم طلب عادة كويسة او عادة وحشة او مهمة بشكل واضح، اضف في اخر الرد سطر واحد فقط بالصيغة:\n"
@@ -51,31 +59,57 @@ if gs.exists():
             "من غير شرح بعد السطر ده.\n"
         )
         injected = False
-        # Common ZIP ending of the chat prompt string
         for old in [
             "رد بهدوء ووضوح.\n''');",
             "رد بهدوء ووضوح.\n\"\"\");",
             "رد بهدوء ووضوح.''');",
-            "رد بهدوء ووضوح.",
         ]:
             if old in g:
-                g = g.replace(old, "رد بهدوء ووضوح.\n" + tag_block + ("''');" if old.endswith("''');") else ""), 1)
+                g = g.replace(old, "رد بهدوء ووضوح.\n" + tag_block + "''');", 1)
                 injected = True
-                print(f"Injected ADD_ tags into chat prompt (matched: {old[:20]}...)")
+                print(f"Injected ADD_ tags into chat prompt")
                 break
-        if not injected:
-            # last resort: append before the closing of chat method
-            m = re.search(r"(Future<String>\s+chat\([\s\S]*?return generateText\(['\"]{1,3})([\s\S]*?)(['\"]{1,3}\);)", g)
-            if m:
-                g = g[:m.end(2)] + "\n" + tag_block + g[m.end(2):]
-                print("Injected ADD_ tags via regex")
-            else:
-                print("WARNING: could not locate chat prompt to inject ADD_ tags")
+        if not injected and "رد بهدوء ووضوح." in g:
+            g = g.replace("رد بهدوء ووضوح.", "رد بهدوء ووضوح.\n" + tag_block, 1)
+            print("Injected ADD_ tags (fallback)")
+
     if "personalityInsight" not in g:
-        print("WARNING: personalityInsight still missing")
+        # Insert a real AI-backed personalityInsight before the final class closing brace
+        method = '''
+  Future<String> personalityInsight({required String profileSummary}) {
+    return generateText(
+      'انت محلل شخصية هادئ وواقعي لتطبيق Liv.\n'
+      'بناء على ملخص المستخدم التالي اكتب تحليل شخصية مختصر وواضح بالعامية المصرية (8-12 سطر):\n'
+      '- نمط الشخصية العام\n'
+      '- نقاط القوة\n'
+      '- نقاط تحتاج تحسين\n'
+      '- عادة واحدة مقترحة\n'
+      '- جملة تحفيزية قصيرة\n\n'
+      'الملخص:\n' + profileSummary + '\n\n'
+      'لا تستخدم Markdown. كن صادق ومفيد.',
+    );
+  }
+'''
+        # Insert before the last closing brace of the class
+        last = g.rstrip()
+        if last.endswith("}"):
+            g = last[:-1] + method + "}\n"
+            print("Injected real personalityInsight method")
+        else:
+            g = g + method
+            print("Appended personalityInsight method")
     else:
         print("personalityInsight present")
+
     gs.write_text(g, encoding="utf-8")
+
+    # final sanity
+    final = gs.read_text(encoding="utf-8")
+    if "personalityInsight" not in final:
+        raise SystemExit("ERROR: personalityInsight still missing after inject")
+    if "Keep growing with LIV" in final or "Keep going!" in final:
+        raise SystemExit("ERROR: placeholder still present")
+    print("gemini_service.dart OK")
 
 # 3) l10n dreams -> أحلام
 l10n = lib / "services/l10n.dart"
