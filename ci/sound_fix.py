@@ -19,15 +19,27 @@ def write_wav(path: Path, duration: float, freqs_amps, decay: float):
         frames = bytearray()
         for i in range(n):
             t = i / SR
-            attack = min(1.0, t / 0.001)
+            attack = min(1.0, t / 0.0015)
             d = math.exp(-t * decay)
             tone = sum(a * math.sin(2.0 * math.pi * f * t) for f, a in freqs_amps)
             s = max(-1.0, min(1.0, tone * attack * d))
-            frames.extend(struct.pack("<h", int(s * 32767)))
+            frames.extend(struct.pack("<h", int(s * 30000)))
         w.writeframes(frames)
 
-write_wav(raw_dir / "liv_picker_tick.wav", 0.05, [(180, 0.75), (90, 0.55), (360, 0.22)], 70)
-write_wav(raw_dir / "liv_button_click.wav", 0.035, [(520, 0.6), (780, 0.28), (260, 0.22)], 110)
+# Age picker: deeper bass body, soft thud (distinct from button)
+write_wav(
+    raw_dir / "liv_picker_tick.wav",
+    0.055,
+    [(95, 0.82), (140, 0.55), (210, 0.28), (40, 0.35)],
+    55,
+)
+# Normal buttons: short clean mid click with subtle body (not harsh)
+write_wav(
+    raw_dir / "liv_button_click.wav",
+    0.032,
+    [(320, 0.55), (480, 0.35), (160, 0.28), (640, 0.12)],
+    95,
+)
 print("[sound_fix] WAVs written")
 
 MAIN_KT = r'''package com.liv
@@ -60,8 +72,8 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "buttonClick" -> {
-                        play(buttonClickId, 0.9f)
-                        vibrate(18)
+                        play(buttonClickId, 0.85f)
+                        vibrate(16)
                         result.success(null)
                     }
                     else -> result.notImplemented()
