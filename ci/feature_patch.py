@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Apply AI features that survive ZIP restore by copying overlays into lib/."""
+"""Apply AI features that survive ZIP restore."""
 from pathlib import Path
+import runpy
 import shutil
 
 ROOT = Path(".")
+ci = ROOT / "ci"
+exp = ci / "expand_ai_overlay.py"
+if exp.exists():
+    runpy.run_path(str(exp))
+
 overlay = ROOT / "ci/overlays/lib"
 lib = ROOT / "lib"
-
-pairs = [
+for rel, marker in [
     ("services/gemini_service.dart", "personalityInsight"),
     ("screens/ai_chat_screen.dart", "addHabit"),
-]
-for rel, marker in pairs:
+]:
     src = overlay / rel
     if not src.exists() or src.stat().st_size < 100:
         raise SystemExit(f"ERROR: missing/empty overlay {src}")
@@ -23,7 +27,7 @@ for rel, marker in pairs:
     dest = lib / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dest)
-    print(f"feature_patch: applied overlay {rel} ({src.stat().st_size} bytes)")
+    print(f"feature_patch: applied {rel}")
 
 l10n = lib / "services/l10n.dart"
 if l10n.exists():
@@ -44,7 +48,7 @@ if l10n.exists():
             n += 1
     if n:
         l10n.write_text(t, encoding="utf-8")
-        print(f"l10n: {n} replacements")
+        print(f"l10n: {n}")
 
 home = lib / "screens/home_screen.dart"
 if home.exists():
