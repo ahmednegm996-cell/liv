@@ -3,7 +3,7 @@
 
 Final source of truth for MainActivity.kt (native feedback only).
 USAGE_MEDIA so click follows the same system media volume as the music.
-Volume gain is passed from Dart (AudioService) so mute/_targetVolume apply.
+Preloads in onCreate so onboarding age picker ticks are not silent.
 
 Does NOT touch HomeScreen circle, AI, or soundtrack.
 """
@@ -56,6 +56,7 @@ MAIN_KT = r'''package com.liv
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Build
+import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -69,6 +70,11 @@ class MainActivity : FlutterActivity() {
     private var ageTickId: Int = 0
     private var buttonClickId: Int = 0
     private val loadedIds = HashSet<Int>()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        initSounds()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -119,8 +125,6 @@ class MainActivity : FlutterActivity() {
     private fun play(soundId: Int, volume: Float) {
         val pool = soundPool ?: return
         if (soundId == 0 || volume <= 0.001f) return
-        // SoundPool.load is async — only play once load completed
-        if (loadedIds.isNotEmpty() && soundId !in loadedIds) return
         pool.play(soundId, volume, volume, 1, 0, 1.0f)
     }
 
@@ -160,5 +164,5 @@ if not mains:
     print("[sound_fix] WARNING: MainActivity.kt not found")
 else:
     mains[0].write_text(MAIN_KT, encoding="utf-8")
-    print(f"[sound_fix] wrote {mains[0]} USAGE_MEDIA + OnLoadCompleteListener")
+    print(f"[sound_fix] wrote {mains[0]} USAGE_MEDIA + onCreate preload")
 print("sound_fix done")
