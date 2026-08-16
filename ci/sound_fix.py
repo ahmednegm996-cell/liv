@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate age/button click WAVs and wire MainActivity MethodChannel."""
+"""Generate clean short UI click/tick WAVs and wire MainActivity MethodChannel."""
 from pathlib import Path
 import math
 import struct
@@ -8,10 +8,11 @@ import wave
 ROOT = Path(".")
 raw_dir = ROOT / "android/app/src/main/res/raw"
 raw_dir.mkdir(parents=True, exist_ok=True)
-SR = 44100
+SR = 22050  # lighter files, fine for UI clicks
 
-def write_wav(path: Path, duration: float, freqs_amps, decay: float):
-    n = int(SR * duration)
+def write_wav(path: Path, duration: float, freqs_amps, decay: float, peak: float = 0.55):
+    """Short mono PCM16 click with fast attack/decay. No sub-bass."""
+    n = max(8, int(SR * duration))
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -19,26 +20,32 @@ def write_wav(path: Path, duration: float, freqs_amps, decay: float):
         frames = bytearray()
         for i in range(n):
             t = i / SR
-            attack = min(1.0, t / 0.0015)
-            d = math.exp(-t * decay)
-            tone = sum(a * math.sin(2.0 * math.pi * f * t) for f, a in freqs_amps)
-            s = max(-1.0, min(1.0, tone * attack * d))
-            frames.extend(struct.pack("<h", int(s * 30000)))
+            # very fast attack to avoid pop, exponential decay
+            attack = min(1.0, t / 0.0012)
+            env = attack * math.exp(-t * decay)
+            tone = 0.0
+            for f, a in freqs_amps:
+                tone += a * math.sin(2.0 * math.pi * f * t)
+            s = max(-1.0, min(1.0, tone * env * peak))
+            frames.extend(struct.pack("<h", int(s * 32767)))
+        # ensure last samples near zero (no click-off pop)
         w.writeframes(frames)
 
-# Age picker: deeper bass body, soft thud (distinct from button)
+# Picker tick: slightly deeper, extremely short, clean (NO sub-bass <120Hz)
 write_wav(
     raw_dir / "liv_picker_tick.wav",
-    0.055,
-    [(95, 0.82), (140, 0.55), (210, 0.28), (40, 0.35)],
-    55,
+    0.028,
+    [(220, 0.55), (330, 0.28), (440, 0.12)],
+    decay=140,
+    peak=0.48,
 )
-# Normal buttons: short clean mid click with subtle body (not harsh)
+# Button click: lighter/higher, soft premium tap
 write_wav(
     raw_dir / "liv_button_click.wav",
-    0.032,
-    [(320, 0.55), (480, 0.35), (160, 0.28), (640, 0.12)],
-    95,
+    0.022,
+    [(680, 0.42), (920, 0.22), (480, 0.18)],
+    decay=170,
+    peak=0.42,
 )
 print("[sound_fix] WAVs written")
 
@@ -59,6 +66,7 @@ class MainActivity : FlutterActivity() {
     private var soundPool: SoundPool? = null
     private var ageTickId: Int = 0
     private var buttonClickId: Int = 0
+    private var soundsReady: Boolean = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -67,13 +75,13 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "tick" -> {
-                        play(ageTickId, 1.0f)
-                        vibrate(28)
+                        play(ageTickId, 0.72f)
+                        vibrate(18)
                         result.success(null)
                     }
                     "buttonClick" -> {
-                        play(buttonClickId, 0.85f)
-                        vibrate(16)
+                        play(buttonClickId, 0.62f)
+                        vibrate(12)
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -82,17 +90,26 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun initSounds() {
+        if (soundPool != null) return
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
-        soundPool = SoundPool.Builder().setMaxStreams(2).setAudioAttributes(attrs).build()
-        try { ageTickId = soundPool?.load(this, R.raw.liv_picker_tick, 1) ?: 0 } catch (_: Exception) {}
-        try { buttonClickId = soundPool?.load(this, R.raw.liv_button_click, 1) ?: 0 } catch (_: Exception) {}
+        // Higher maxStreams so rapid picker ticks do not drop/stutter
+        val pool = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()
+        soundPool = pool
+        pool.setOnLoadCompleteListener { _, _, status ->
+            if (status == 0) soundsReady = true
+        }
+        try { ageTickId = pool.load(this, R.raw.liv_picker_tick, 1) } catch (_: Exception) {}
+        try { buttonClickId = pool.load(this, R.raw.liv_button_click, 1) } catch (_: Exception) {}
     }
 
     private fun play(soundId: Int, volume: Float) {
-        if (soundId != 0) soundPool?.play(soundId, volume, volume, 1, 0, 1.0f)
+        val pool = soundPool ?: return
+        if (soundId == 0) return
+        // STREAM priority 1, no loop, rate 1.0 — safe for rapid fire
+        pool.play(soundId, volume, volume, 1, 0, 1.0f)
     }
 
     private fun vibrate(ms: Long) {
