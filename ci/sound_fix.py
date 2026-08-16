@@ -20,32 +20,28 @@ def write_wav(path: Path, duration: float, freqs_amps, decay: float, peak: float
         frames = bytearray()
         for i in range(n):
             t = i / SR
-            # soft raised-cosine attack (~2ms) to avoid pop
             attack = 0.5 - 0.5 * math.cos(math.pi * min(1.0, t / 0.002))
             env = attack * math.exp(-t * decay)
             tone = 0.0
             for f, a in freqs_amps:
                 tone += a * math.sin(2.0 * math.pi * f * t)
-            # gentle soft-clip
             s = math.tanh(tone * env * peak)
-            frames.extend(struct.pack("<h", int(s * 28000)))
+            frames.extend(struct.pack("<h", int(s * 26000)))
         w.writeframes(frames)
 
-# Picker: soft deeper tick (media-friendly)
 write_wav(
     raw_dir / "liv_picker_tick.wav",
-    0.024,
-    [(260, 0.55), (390, 0.25), (520, 0.10)],
-    decay=160,
-    peak=0.55,
+    0.022,
+    [(250, 0.50), (375, 0.22), (500, 0.08)],
+    decay=170,
+    peak=0.40,
 )
-# Button: soft premium mid click
 write_wav(
     raw_dir / "liv_button_click.wav",
-    0.018,
-    [(720, 0.45), (1080, 0.18), (540, 0.15)],
-    decay=190,
-    peak=0.48,
+    0.016,
+    [(700, 0.40), (1050, 0.15), (520, 0.12)],
+    decay=200,
+    peak=0.34,
 )
 print("[sound_fix] WAVs written")
 
@@ -74,13 +70,13 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "tick" -> {
-                        play(ageTickId, 0.55f)
-                        vibrate(14)
+                        play(ageTickId, 0.38f)
+                        vibrate(12)
                         result.success(null)
                     }
                     "buttonClick" -> {
-                        play(buttonClickId, 0.48f)
-                        vibrate(10)
+                        play(buttonClickId, 0.32f)
+                        vibrate(8)
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -90,7 +86,6 @@ class MainActivity : FlutterActivity() {
 
     private fun initSounds() {
         if (soundPool != null) return
-        // USAGE_MEDIA so clicks follow the same volume slider as the app music
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
