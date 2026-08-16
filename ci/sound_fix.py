@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """UI click/tick WAVs + MainActivity SoundPool on MEDIA stream.
 
-Final source of truth for MainActivity.kt (runs last after feedback_patch).
+Final source of truth for MainActivity.kt (native feedback only).
 USAGE_MEDIA so click follows the same system media volume as the music.
 Volume gain is passed from Dart (AudioService) so mute/_targetVolume apply.
+
+Does NOT touch HomeScreen circle, AI, or soundtrack.
 """
 from pathlib import Path
 import math
@@ -14,6 +16,7 @@ ROOT = Path(".")
 raw_dir = ROOT / "android/app/src/main/res/raw"
 raw_dir.mkdir(parents=True, exist_ok=True)
 SR = 44100
+
 
 def write_wav(path: Path, duration: float, freqs_amps, decay: float, peak: float):
     n = max(16, int(SR * duration))
@@ -30,6 +33,7 @@ def write_wav(path: Path, duration: float, freqs_amps, decay: float, peak: float
             s = math.tanh(tone * env * peak)
             frames.extend(struct.pack("<h", int(s * 30000)))
         w.writeframes(frames)
+
 
 write_wav(
     raw_dir / "liv_picker_tick.wav",
@@ -64,6 +68,7 @@ class MainActivity : FlutterActivity() {
     private var soundPool: SoundPool? = null
     private var ageTickId: Int = 0
     private var buttonClickId: Int = 0
+    private val loadedIds = HashSet<Int>()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -90,20 +95,32 @@ class MainActivity : FlutterActivity() {
 
     private fun initSounds() {
         if (soundPool != null) return
-        // Same stream as meditation music (audioplayers media) → system media volume
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         val pool = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()
+        pool.setOnLoadCompleteListener { _, sampleId, status ->
+            if (status == 0 && sampleId != 0) {
+                loadedIds.add(sampleId)
+            }
+        }
         soundPool = pool
-        try { ageTickId = pool.load(this, R.raw.liv_picker_tick, 1) } catch (_: Exception) {}
-        try { buttonClickId = pool.load(this, R.raw.liv_button_click, 1) } catch (_: Exception) {}
+        try {
+            ageTickId = pool.load(this, R.raw.liv_picker_tick, 1)
+        } catch (_: Exception) {
+        }
+        try {
+            buttonClickId = pool.load(this, R.raw.liv_button_click, 1)
+        } catch (_: Exception) {
+        }
     }
 
     private fun play(soundId: Int, volume: Float) {
         val pool = soundPool ?: return
         if (soundId == 0 || volume <= 0.001f) return
+        // SoundPool.load is async — only play once load completed
+        if (loadedIds.isNotEmpty() && soundId !in loadedIds) return
         pool.play(soundId, volume, volume, 1, 0, 1.0f)
     }
 
@@ -124,12 +141,15 @@ class MainActivity : FlutterActivity() {
                     v.vibrate(ms)
                 }
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     override fun onDestroy() {
+        soundPool?.setOnLoadCompleteListener(null)
         soundPool?.release()
         soundPool = null
+        loadedIds.clear()
         super.onDestroy()
     }
 }
@@ -140,5 +160,5 @@ if not mains:
     print("[sound_fix] WARNING: MainActivity.kt not found")
 else:
     mains[0].write_text(MAIN_KT, encoding="utf-8")
-    print(f"[sound_fix] wrote {mains[0]} USAGE_MEDIA")
+    print(f"[sound_fix] wrote {mains[0]} USAGE_MEDIA + OnLoadCompleteListener")
 print("sound_fix done")
