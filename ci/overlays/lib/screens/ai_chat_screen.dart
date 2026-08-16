@@ -16,10 +16,18 @@ class _AIChatScreenState extends State<AIChatScreen> {
   final _scroll = ScrollController();
   final List<Map<String, String>> _messages = [];
   bool _sending = false;
-  List<Map<String, String>> _pendingActions = [];
   bool _historyLoaded = false;
+  List<Map<String, String>> _pendingActions = [];
 
   static const _asset = 'assets/audio/meditation_ambient.mp3';
+
+  static const _quick = [
+    'حلل يومي',
+    'حفزني',
+    'خطة لع عادة',
+    'نصيحة نوم',
+    'رتّب أولوياتي',
+  ];
 
   @override
   void initState() {
@@ -94,72 +102,73 @@ class _AIChatScreenState extends State<AIChatScreen> {
         .trim();
   }
 
-  Future<void> _applyAction(Map<String, String> action) async {
+  Future<void> _applyAllActions() async {
+    if (_pendingActions.isEmpty) return;
     final state = context.read<AppState>();
-    final name = action['name'] ?? '';
-    if (name.isEmpty) return;
-    try {
-      final type = action['type'];
-      if (type == 'GOOD') {
-        await state.addHabit(name, true);
-      } else if (type == 'BAD') {
-        await state.addHabit(name, false);
-      } else if (type == 'TASK') {
-        await state.addWeeklyTask(name);
-      }
-      if (!mounted) return;
-      setState(() {
-        _pendingActions.removeWhere(
-          (a) => a['type'] == action['type'] && a['name'] == action['name'],
-        );
-        final msg = type == 'TASK'
-            ? 'تمت إضافة "$name" إلى المهام ✓'
-            : type == 'BAD'
-                ? 'تمت إضافة "$name" إلى العادات السيئة ✓'
-                : 'تمت إضافة "$name" إلى العادات الجيدة ✓';
-        _messages.add({'role': 'assistant', 'text': msg});
-      });
-      await _persist();
-      _scrollToEnd();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _messages.add({'role': 'assistant', 'text': 'مقدرناش نضيف العنصر: $e'});
-      });
+    final actions = List<Map<String, String>>.from(_pendingActions);
+    final added = <String>[];
+    for (final action in actions) {
+      final name = action['name'] ?? '';
+      if (name.isEmpty) continue;
+      try {
+        final type = action['type'];
+        if (type == 'GOOD') {
+          await state.addHabit(name, true);
+          added.add('عادة جيدة: $name');
+        } else if (type == 'BAD') {
+          await state.addHabit(name, false);
+          added.add('عادة سيئة: $name');
+        } else if (type == 'TASK') {
+          await state.addWeeklyTask(name);
+          added.add('مهمة: $name');
+        }
+      } catch (_) {}
     }
+    if (!mounted) return;
+    setState(() {
+      _pendingActions = [];
+      if (added.isNotEmpty) {
+        _messages.add({
+          'role': 'assistant',
+          'text': 'تمت الإضافة ✓\n${added.map((e) => '• $e').join('\n')}',
+        });
+      }
+    });
+    await _persist();
+    _scrollToEnd();
   }
 
   void _scrollToEnd() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(milliseconds: 120), () {
       if (_scroll.hasClients) {
         _scroll.animateTo(
           _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 280),
           curve: Curves.easeOut,
         );
       }
     });
   }
 
-  Future<void> _send([String? forced]) async {
-    final text = (forced ?? _input.text).trim();
+  Future<void> _send([String? preset]) async {
+    final text = (preset ?? _input.text).trim();
     if (text.isEmpty || _sending) return;
+    _input.clear();
     setState(() {
       _messages.add({'role': 'user', 'text': text});
-      _input.clear();
       _sending = true;
       _pendingActions = [];
     });
     _scrollToEnd();
     await _persist();
+
+    final state = context.read<AppState>();
     try {
-      final state = context.read<AppState>();
       final reply = await state.ai.chat(
         userMessage: text,
         context: state.aiContext,
         history: _messages
-            .where((m) => m['role'] != null)
-            .map((m) => {'role': m['role']!, 'text': m['text'] ?? ''})
+            .map((m) => {'role': m['role']!, 'text': m['text']!})
             .toList(),
       );
       final actions = _parseAddTags(reply);
@@ -170,8 +179,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
         _pendingActions = actions;
         _sending = false;
       });
-      await _persist();
-      _scrollToEnd();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -179,124 +186,352 @@ class _AIChatScreenState extends State<AIChatScreen> {
         _sending = false;
       });
     }
-  }
-
-  String _chipLabel(Map<String, String> a) {
-    final name = a['name'] ?? '';
-    final type = a['type'];
-    if (type == 'TASK') return 'إضافة "$name" للمهام';
-    if (type == 'BAD') return 'إضافة "$name" للعادات السيئة';
-    return 'إضافة "$name" للعادات الجيدة';
+    await _persist();
+    _scrollToEnd();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final accent = AppColors.accentFrom(state.profile.accentColor);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final danger = state.profile.hearts <= 0;
+    final accent = AppColors.accentFrom(state.profile.accentColor);
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Column(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 450),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: danger
+                      ? const [Color(0xFF2A0A12), Color(0xFF1A0508), Color(0xFF3B0D16)]
+                      : isDark
+                          ? const [Color(0xFF0B0F1A), Color(0xFF12182B), Color(0xFF0E1620), Color(0xFF1A1030)]
+                          : const [Color(0xFFEEF2FF), Color(0xFFF5F3FF), Color(0xFFE0F2FE)],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: -40,
+            right: -30,
+            child: IgnorePointer(
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      accent.withOpacity(isDark ? 0.22 : 0.18),
+                      accent.withOpacity(0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 120,
+            left: -50,
+            child: IgnorePointer(
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      (isDark ? const Color(0xFF6366F1) : accent)
+                          .withOpacity(isDark ? 0.16 : 0.12),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                _header(state, accent, danger),
+                Expanded(
+                  child: ListView(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+                    children: [
+                      if (_messages.length <= 1) _quickPrompts(accent, isDark),
+                      ..._messages.map((m) => _bubble(m, accent)),
+                      if (_sending)
+                        const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: _Typing(),
+                          ),
+                        ),
+                      if (_pendingActions.isNotEmpty) _addAllButton(accent),
+                    ],
+                  ),
+                ),
+                _composer(accent),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _header(AppState state, Color accent, bool danger) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+        child: Row(
           children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: danger
+                      ? [AppColors.danger, AppColors.dangerDark]
+                      : [accent, accent.withOpacity(0.7)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.auto_awesome, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
             Expanded(
-              child: ListView(
-                controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ..._messages.map((m) {
-                    final isUser = m['role'] == 'user';
-                    return Align(
-                      alignment:
-                          isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.78,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isUser
-                              ? accent.withOpacity(0.18)
-                              : (isDark
-                                  ? Colors.white.withOpacity(0.08)
-                                  : Colors.grey.shade100),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          m['text'] ?? '',
-                          style: const TextStyle(fontSize: 15, height: 1.35),
-                        ),
-                      ),
-                    );
-                  }),
-                  if (_sending)
-                    const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    ),
-                  if (_pendingActions.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10, bottom: 4),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _pendingActions.map((a) {
-                          return ActionChip(
-                            avatar: const Icon(Icons.add_task, size: 18),
-                            label: Text(
-                              _chipLabel(a),
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                            onPressed: () => _applyAction(a),
-                          );
-                        }).toList(),
-                      ),
-                    ),
+                  Text(
+                    danger ? 'Liv AI — وضع خطر' : 'Liv AI',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                  ),
+                  Text(
+                    state.ai.isConfigured
+                        ? 'متصل • ${state.profile.aiProvider}'
+                        : 'حط API Key من البروفايل',
+                    style: TextStyle(fontSize: 12, color: secondaryText(context)),
+                  ),
                 ],
               ),
             ),
+            if (_messages.length > 1)
+              IconButton(
+                tooltip: 'مسح الشات',
+                onPressed: () async {
+                  setState(() {
+                    _pendingActions = [];
+                    _messages
+                      ..clear()
+                      ..add({
+                        'role': 'assistant',
+                        'text': 'تم مسح المحادثة. نبدأ من جديد؟'
+                      });
+                  });
+                  await _persist();
+                },
+                icon: const Icon(Icons.delete_outline),
+              ),
+          ],
+        ),
+      );
+
+  /// Vertical full-width suggestion boxes (not horizontal chips).
+  Widget _quickPrompts(Color accent, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final t in _quick)
             Padding(
-              padding: EdgeInsets.fromLTRB(12, 0, 12, bottomInset > 0 ? 8 : 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: InputDecoration(
-                        hintText: 'اسأل Liv...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _send(t),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.07)
+                          : Colors.white.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.black.withOpacity(0.06),
+                      ),
+                    ),
+                    child: Text(
+                      t,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: accent,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _sending ? null : () => _send(),
-                    icon: const Icon(Icons.send_rounded),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _addAllButton(Color accent) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _applyAllActions,
+          icon: const Icon(Icons.playlist_add_check_rounded, size: 20),
+          label: const Text('إضافة الكل إلى المهام'),
+          style: FilledButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bubble(Map<String, String> m, Color accent) {
+    final isUser = m['role'] == 'user';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Align(
+      alignment: isUser ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        decoration: BoxDecoration(
+          color: isUser
+              ? accent
+              : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isUser ? 6 : 20),
+            bottomRight: Radius.circular(isUser ? 20 : 6),
+          ),
+          border: isUser
+              ? null
+              : Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.06)
+                      : Colors.black.withOpacity(0.05),
+                ),
+          boxShadow: [
+            BoxShadow(
+              color: (isUser ? accent : Colors.black).withOpacity(isUser ? 0.22 : 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Text(
+          m['text'] ?? '',
+          style: TextStyle(
+            color: isUser ? Colors.white : null,
+            height: 1.5,
+            fontSize: 14.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _composer(Color accent) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _input,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _send(),
+                decoration: const InputDecoration(
+                  hintText: 'اكتب لـ Liv...',
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _sending ? null : () => _send(),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [accent, accent.withOpacity(0.8)],
                   ),
-                ],
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withOpacity(0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
               ),
             ),
           ],
         ),
+      );
+}
+
+class _Typing extends StatelessWidget {
+  const _Typing();
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.06)
+              : Colors.black.withOpacity(0.05),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text('Liv بيفكر...', style: TextStyle(color: secondaryText(context), fontSize: 13)),
+        ],
       ),
     );
   }
