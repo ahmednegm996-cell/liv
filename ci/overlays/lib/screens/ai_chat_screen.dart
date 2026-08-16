@@ -24,7 +24,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
   static const _quick = [
     'حلل يومي',
     'حفزني',
-    'خطة لع عادة',
+    'خطة عادة',
     'نصيحة نوم',
     'رتّب أولوياتي',
   ];
@@ -264,7 +264,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                     controller: _scroll,
                     padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
                     children: [
-                      if (_messages.length <= 1) _quickPrompts(accent, isDark),
+                      _quickPrompts(accent, isDark),
                       ..._messages.map((m) => _bubble(m, accent)),
                       if (_sending)
                         const Padding(
@@ -343,47 +343,21 @@ class _AIChatScreenState extends State<AIChatScreen> {
         ),
       );
 
-  /// Vertical full-width suggestion boxes (not horizontal chips).
+  /// Compact suggestion chips — same visual language as onboarding choices.
   Widget _quickPrompts(Color accent, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
         children: [
           for (final t in _quick)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _send(t),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.07)
-                          : Colors.white.withOpacity(0.85),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.08)
-                            : Colors.black.withOpacity(0.06),
-                      ),
-                    ),
-                    child: Text(
-                      t,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: accent,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            ActionChip(
+              label: Text(t, style: const TextStyle(fontSize: 13)),
+              onPressed: _sending ? null : () => _send(t),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
             ),
         ],
       ),
