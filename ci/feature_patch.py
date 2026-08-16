@@ -143,13 +143,21 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home circle — visual ring larger via OverflowBox; layout slot stays 70 so card does not grow.
-# Never change % fontSize. Never enlarge the parent card.
+# 4) home circle — OverflowBox needs ListView clipBehavior: Clip.none or it is invisible.
+# Layout slot stays 70 (card size unchanged). Visual ring 124. % text stays fontSize 14.
 home = lib / "screens/home_screen.dart"
 if not home.exists():
     raise SystemExit("ERROR: lib/screens/home_screen.dart missing after ZIP restore")
 
 ht = home.read_text(encoding="utf-8")
+
+# Critical: ListView clips overflow paint — without this OverflowBox is useless
+if "clipBehavior: Clip.none" not in ht:
+    if "child: ListView(" in ht:
+        ht = ht.replace("child: ListView(", "child: ListView(\n          clipBehavior: Clip.none,", 1)
+        print("home: ListView clipBehavior=Clip.none")
+    else:
+        raise SystemExit("ERROR: ListView not found in home_screen")
 
 OLD = """                  SizedBox(
                     width: 70,
@@ -175,6 +183,40 @@ OLD = """                  SizedBox(
                   ),"""
 
 NEW = """                  SizedBox(
+                    width: 70,
+                    height: 70,
+                    child: OverflowBox(
+                      maxWidth: 124,
+                      maxHeight: 124,
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: 124,
+                        height: 124,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircularProgressIndicator(
+                              value: progress,
+                              strokeWidth: 9,
+                              backgroundColor: accent.withOpacity(0.15),
+                              valueColor: AlwaysStoppedAnimation(accent),
+                            ),
+                            Text(
+                              '${(progress * 100).round()}%',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                  color: accent),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),"""
+
+OLD_130 = OLD.replace("width: 70,", "width: 130,").replace("height: 70,", "height: 130,").replace("strokeWidth: 6,", "strokeWidth: 10,")
+OLD_118 = """                  SizedBox(
                     width: 70,
                     height: 70,
                     child: OverflowBox(
@@ -206,29 +248,30 @@ NEW = """                  SizedBox(
                     ),
                   ),"""
 
-# Also accept if a previous patch already set 130
-OLD_130 = OLD.replace("width: 70,", "width: 130,").replace("height: 70,", "height: 130,").replace("strokeWidth: 6,", "strokeWidth: 10,")
-
-if "OverflowBox" in ht and "width: 118" in ht and "fontSize: 14" in ht:
-    print("home: progress circle already OverflowBox 118 (text 14)")
+if "width: 124" in ht and "OverflowBox" in ht and "clipBehavior: Clip.none" in ht:
+    print("home: circle already 124 + Clip.none")
 elif OLD in ht:
-    home.write_text(ht.replace(OLD, NEW, 1), encoding="utf-8")
-    print("home: progress ring OverflowBox 118, layout slot 70, fontSize 14")
+    ht = ht.replace(OLD, NEW, 1)
+    print("home: OverflowBox 124 + layout 70 + fontSize 14")
+elif OLD_118 in ht:
+    ht = ht.replace(OLD_118, NEW, 1)
+    print("home: upgraded OverflowBox 118→124")
 elif OLD_130 in ht:
-    home.write_text(ht.replace(OLD_130, NEW, 1), encoding="utf-8")
-    print("home: reverted 130 card growth → OverflowBox 118 in 70 slot")
+    ht = ht.replace(OLD_130, NEW, 1)
+    print("home: reverted card growth 130 → OverflowBox 124")
+elif "value: progress" not in ht:
+    raise SystemExit("ERROR: today-progress circle not found")
 else:
-    if "value: progress" not in ht:
-        raise SystemExit("ERROR: today-progress circle not found")
-    raise SystemExit("ERROR: progress circle block did not match expected ZIP pattern")
+    raise SystemExit("ERROR: progress circle block did not match expected pattern")
 
+home.write_text(ht, encoding="utf-8")
 final = home.read_text(encoding="utf-8")
-if "OverflowBox" not in final or "width: 118" not in final:
-    raise SystemExit("ERROR: verify failed — OverflowBox 118 missing")
-if "fontSize: 20" in final and "fontSize: 14" not in final:
-    raise SystemExit("ERROR: % fontSize was enlarged")
+if "OverflowBox" not in final or "width: 124" not in final:
+    raise SystemExit("ERROR: verify failed — OverflowBox 124 missing")
+if "clipBehavior: Clip.none" not in final:
+    raise SystemExit("ERROR: ListView Clip.none missing — circle would be clipped")
 if "width: 70" not in final:
-    raise SystemExit("ERROR: layout slot width 70 missing — card may still be enlarged")
-print("VERIFY OK: layout=70 visual=118 text=14")
+    raise SystemExit("ERROR: layout slot 70 missing")
+print("VERIFY OK: ListView Clip.none + layout=70 visual=124 text=14")
 
 print("feature_patch done OK")
