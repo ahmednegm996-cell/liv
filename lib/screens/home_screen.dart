@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
 import '../services/l10n.dart';
@@ -23,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen>
   double _displayedAge = 0.0;
   int _lastAgeTick = -1;
   bool _ageAnimationStarted = false;
+  bool _ageScheduled = false;
 
   @override
   void dispose() {
@@ -30,9 +30,25 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_ageScheduled) return;
+    _ageScheduled = true;
+
+    final state = context.read<AppState>();
+    final realAge = state.profile.birthDate != null
+        ? _calculateAge(state.profile.birthDate!)
+        : 25.0;
+
+    // Schedule once after first frame — never from build().
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startAgeAnimation(realAge);
+    });
+  }
+
   void _startAgeAnimation(double realAge) {
     if (_ageAnimationStarted) return;
-
     _ageAnimationStarted = true;
 
     final double safeAge = realAge.clamp(0.0, 120.0).toDouble();
@@ -62,13 +78,11 @@ class _HomeScreenState extends State<HomeScreen>
         _displayedAge = currentAge;
       });
 
-      // Tick once for every completed year.
+      // Tick once per completed year only (native sound + vibration via AudioService).
       if (currentWholeYear > _lastAgeTick &&
           currentWholeYear > 0 &&
           currentWholeYear <= safeAge.floor()) {
         _lastAgeTick = currentWholeYear;
-
-        // iPhone-style light haptic + system click.
         AudioService.instance.tick();
       }
     });
@@ -82,20 +96,6 @@ class _HomeScreenState extends State<HomeScreen>
     final t = L10n.of(state.profile.locale);
     final accent = AppColors.accentFrom(state.profile.accentColor);
 
-    final realAge = state.profile.birthDate != null
-        ? _calculateAge(state.profile.birthDate!)
-        : 25.0;
-
-    // Start the counter after the first frame so that the widget
-    // is fully mounted before the animation begins.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _startAgeAnimation(realAge);
-      }
-    });
-
-    // If the user's birth date changes while the screen is open,
-    // keep the displayed value synchronized.
     final age = _ageAnimationStarted ? _displayedAge : 0.0;
 
     return Scaffold(
@@ -105,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen>
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Large progress circle
+          // Progress circle — size controlled here only (no CI forced resize).
           Center(
             child: SizedBox(
               width: 220,
@@ -147,7 +147,6 @@ class _HomeScreenState extends State<HomeScreen>
 
           Gaps.h24,
 
-          // Body information
           GlassCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,45 +155,30 @@ class _HomeScreenState extends State<HomeScreen>
                   state.profile.locale == 'en' ? 'Body' : 'الجسم',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-
                 Gaps.h12,
-
                 _bar(
                   context,
-                  state.profile.locale == 'en'
-                      ? 'Height'
-                      : 'الطول',
+                  state.profile.locale == 'en' ? 'Height' : 'الطول',
                   state.profile.heightCm / 220,
                   accent,
                   '${state.profile.heightCm.toStringAsFixed(0)} cm',
                 ),
-
                 Gaps.h8,
-
                 _bar(
                   context,
-                  state.profile.locale == 'en'
-                      ? 'Weight'
-                      : 'الوزن',
+                  state.profile.locale == 'en' ? 'Weight' : 'الوزن',
                   state.profile.weightKg / 150,
                   AppColors.teal,
                   '${state.profile.weightKg.toStringAsFixed(0)} kg',
                 ),
-
                 Gaps.h8,
-
-                // Animated Age Counter
-                _ageBar(
-                  context,
-                  age,
-                ),
+                _ageBar(context, age),
               ],
             ),
           ),
 
           Gaps.h16,
 
-          // Daily tasks
           GlassCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,7 +190,6 @@ class _HomeScreenState extends State<HomeScreen>
                       t.morningRoutine,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-
                     IconButton(
                       icon: const Icon(Icons.add),
                       onPressed: () async {
@@ -218,13 +201,12 @@ class _HomeScreenState extends State<HomeScreen>
                             points: 10,
                           ),
                         );
-
-                        AudioService.instance.tick();
+                        // UI button → buttonClick (not age tick).
+                        AudioService.instance.buttonClick();
                       },
                     ),
                   ],
                 ),
-
                 ...state.tasks.map(
                   (task) => ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -232,9 +214,8 @@ class _HomeScreenState extends State<HomeScreen>
                       value: task.done,
                       onChanged: (_) {
                         state.toggleTask(task.id);
-
-                        HapticFeedback.lightImpact();
-                        AudioService.instance.tick();
+                        // Single feedback path: native sound + vibration via AudioService.
+                        AudioService.instance.buttonClick();
                       },
                     ),
                     title: Text(
@@ -246,11 +227,11 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        size: 20,
-                      ),
-                      onPressed: () => state.removeTask(task.id),
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      onPressed: () {
+                        state.removeTask(task.id);
+                        AudioService.instance.buttonClick();
+                      },
                     ),
                   ),
                 ),
@@ -264,44 +245,30 @@ class _HomeScreenState extends State<HomeScreen>
 
   double _calculateAge(DateTime birthDate) {
     final now = DateTime.now();
-
     final difference = now.difference(birthDate);
-
     return difference.inDays / 365.2425;
   }
 
-  Widget _ageBar(
-    BuildContext context,
-    double age,
-  ) {
+  Widget _ageBar(BuildContext context, double age) {
     final color = AppColors.pink;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'العمر',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text('العمر', style: Theme.of(context).textTheme.bodyMedium),
             Text(
               age.toStringAsFixed(1),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
-
         Gaps.h4,
-
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(
-              begin: 0.0,
-              end: (age / 100).clamp(0.0, 1.0),
-            ),
+            tween: Tween<double>(begin: 0.0, end: (age / 100).clamp(0.0, 1.0)),
             duration: const Duration(milliseconds: 2600),
             curve: Curves.easeOutCubic,
             builder: (context, value, child) {
@@ -332,15 +299,10 @@ class _HomeScreenState extends State<HomeScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label),
-            Text(
-              trailing,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(trailing, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
-
         Gaps.h4,
-
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: LinearProgressIndicator(
