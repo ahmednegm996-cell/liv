@@ -81,7 +81,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
     for (final m in re.allMatches(reply)) {
       final name = m.group(2)!.trim();
       if (name.isEmpty) continue;
-      // dedupe by type+name
       if (out.any((a) => a['type'] == m.group(1)! && a['name'] == name)) continue;
       out.add({'type': m.group(1)!, 'name': name});
     }
@@ -89,7 +88,10 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   String _stripAddTags(String reply) {
-    return reply.replaceAll(RegExp(r'\s*\[ADD_(GOOD|BAD|TASK):[^\]]+\]\s*'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return reply
+        .replaceAll(RegExp(r'\s*\[ADD_(GOOD|BAD|TASK):[^\]]+\]\s*'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   Future<void> _applyAction(Map<String, String> action) async {
@@ -192,62 +194,80 @@ class _AIChatScreenState extends State<AIChatScreen> {
     final state = context.watch<AppState>();
     final accent = AppColors.accentFrom(state.profile.accentColor);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              children: [
-                ..._messages.map((m) {
-                  final isUser = m['role'] == 'user';
-                  return Align(
-                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-                      decoration: BoxDecoration(
-                        color: isUser
-                            ? accent.withOpacity(0.18)
-                            : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100),
-                        borderRadius: BorderRadius.circular(16),
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                controller: _scroll,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                children: [
+                  ..._messages.map((m) {
+                    final isUser = m['role'] == 'user';
+                    return Align(
+                      alignment:
+                          isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.78,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isUser
+                              ? accent.withOpacity(0.18)
+                              : (isDark
+                                  ? Colors.white.withOpacity(0.08)
+                                  : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          m['text'] ?? '',
+                          style: const TextStyle(fontSize: 15, height: 1.35),
+                        ),
                       ),
-                      child: Text(m['text'] ?? '', style: const TextStyle(fontSize: 15, height: 1.35)),
+                    );
+                  }),
+                  if (_sending)
+                    const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
                     ),
-                  );
-                }),
-                if (_sending)
-                  const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+                  if (_pendingActions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, bottom: 4),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _pendingActions.map((a) {
+                          return ActionChip(
+                            avatar: const Icon(Icons.add_task, size: 18),
+                            label: Text(
+                              _chipLabel(a),
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            onPressed: () => _applyAction(a),
+                          );
+                        }).toList(),
+                      ),
                     ),
-                  ),
-                if (_pendingActions.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _pendingActions.map((a) {
-                        return ActionChip(
-                          avatar: const Icon(Icons.add_task, size: 18),
-                          label: Text(_chipLabel(a), style: const TextStyle(fontSize: 13)),
-                          onPressed: () => _applyAction(a),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, bottomInset > 0 ? 8 : 12),
               child: Row(
                 children: [
                   Expanded(
@@ -257,8 +277,13 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       onSubmitted: (_) => _send(),
                       decoration: InputDecoration(
                         hintText: 'اسأل Liv...',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                   ),
@@ -270,8 +295,8 @@ class _AIChatScreenState extends State<AIChatScreen> {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
