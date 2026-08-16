@@ -30,7 +30,6 @@ ASSET = "assets/audio/meditation_ambient.mp3"
 LONG_ASSET = (
     "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
 )
-# Must match AudioService.meditationVolume
 MED_VOL = "1.0"
 
 # 2) Canonical meditation file
@@ -64,7 +63,7 @@ if pub.exists():
     pub.write_text(t, encoding="utf-8")
     print("pubspec assets:", asset_entries)
 
-# 4) Onboarding — ensure AudioService + asset + fadeOut on complete (minimal)
+# 4) Onboarding — ensure AudioService + asset + fadeOut on complete
 ob = Path("lib/screens/onboarding_screen.dart")
 if ob.exists():
     t = ob.read_text(encoding="utf-8")
@@ -79,7 +78,6 @@ if ob.exists():
         else:
             t = "import '../services/audio_service.dart';\n" + t
         changed = True
-    # Normalize any playLoop to canonical asset + volume
     t2 = re.sub(
         r"AudioService\.instance\.playLoop\(\s*'[^']*'\s*(,\s*volume:\s*[0-9.]+)?\s*(,\s*fadeIn:\s*(true|false))?\s*\)",
         f"AudioService.instance.playLoop('{ASSET}', volume: {MED_VOL}, fadeIn: true)",
@@ -118,7 +116,7 @@ if ob.exists():
 else:
     print("WARNING: onboarding_screen.dart missing")
 
-# 5) AI chat screens — asset + volume only (keep tick/buttonClick as authored)
+# 5) AI chat — asset + volume + dispose fadeOut
 for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
     t = ai.read_text(encoding="utf-8")
     ch = False
@@ -141,13 +139,24 @@ for ai in list(Path("lib/screens").glob("*ai*chat*.dart")):
     if t2 != t:
         t = t2
         ch = True
-    # stop → fadeOut when leaving
     if "AudioService.instance.stop()" in t:
         t = t.replace(
             "AudioService.instance.stop()",
             "AudioService.instance.fadeOut(duration: const Duration(milliseconds: 1200))",
         )
         ch = True
+    # Ensure dispose fades meditation (once)
+    if "void dispose()" in t and "fadeOut" not in t[t.find("void dispose()"):t.find("void dispose()") + 280]:
+        t2 = re.sub(
+            r"(void\s+dispose\s*\(\s*\)\s*\{\s*)",
+            r"\1AudioService.instance.fadeOut(duration: const Duration(milliseconds: 1200));\n    ",
+            t,
+            count=1,
+        )
+        if t2 != t:
+            t = t2
+            ch = True
+            print("AI dispose fadeOut added:", ai.name)
     if ch:
         ai.write_text(t, encoding="utf-8")
         print("AI audio wired:", ai.name)
@@ -164,7 +173,7 @@ if rp.exists():
         rp.write_text(t, encoding="utf-8")
         print("root_shell: stop→fadeOut")
 
-# NOTE: Age tick must stay tick(). Buttons should use buttonClick() in source.
-# This script intentionally does NOT rewrite tick() → buttonClick().
+# Age tick stays tick(). Buttons should call buttonClick() in source code.
+# This script never rewrites tick() → buttonClick().
 
 print("soundtrack_patch done OK")
