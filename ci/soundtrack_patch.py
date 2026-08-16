@@ -15,7 +15,7 @@ else:
 ASSET = "assets/audio/meditation_ambient.mp3"
 LONG_ASSET = "assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
 # Must match AudioService.meditationVolume
-MED_VOL = "0.85"
+MED_VOL = "1.0"
 
 Path("assets/audio").mkdir(parents=True, exist_ok=True)
 canonical = Path(ASSET)
