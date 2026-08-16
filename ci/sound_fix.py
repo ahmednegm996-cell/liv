@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Generate soft premium UI click/tick WAVs.
-UI feedback uses ASSISTANCE_SONIFICATION so it is independent of media volume.
+"""UI click/tick WAVs + MainActivity SoundPool on MEDIA stream.
+
+Final source of truth for MainActivity.kt (runs last after feedback_patch).
+USAGE_MEDIA so click follows the same system media volume as the music.
+Volume gain is passed from Dart (AudioService) so mute/_targetVolume apply.
 """
 from pathlib import Path
 import math
@@ -28,7 +31,6 @@ def write_wav(path: Path, duration: float, freqs_amps, decay: float, peak: float
             frames.extend(struct.pack("<h", int(s * 30000)))
         w.writeframes(frames)
 
-# Picker: slightly deeper soft tick
 write_wav(
     raw_dir / "liv_picker_tick.wav",
     0.026,
@@ -36,7 +38,6 @@ write_wav(
     decay=155,
     peak=0.62,
 )
-# Button: soft premium mid click — clear but not harsh
 write_wav(
     raw_dir / "liv_button_click.wav",
     0.018,
@@ -69,15 +70,17 @@ class MainActivity : FlutterActivity() {
         initSounds()
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
+                val volArg = call.argument<Double>("volume")
+                val gain = (volArg?.toFloat() ?: 1.0f).coerceIn(0f, 1f)
                 when (call.method) {
                     "tick" -> {
-                        play(ageTickId, 0.85f)
-                        vibrate(14)
+                        play(ageTickId, gain * 0.9f)
+                        if (gain > 0.01f) vibrate(14)
                         result.success(null)
                     }
                     "buttonClick" -> {
-                        play(buttonClickId, 0.78f)
-                        vibrate(10)
+                        play(buttonClickId, gain * 0.85f)
+                        if (gain > 0.01f) vibrate(10)
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -87,9 +90,9 @@ class MainActivity : FlutterActivity() {
 
     private fun initSounds() {
         if (soundPool != null) return
-        // Sonification stream: independent from media/music volume slider
+        // Same stream as meditation music (audioplayers media) → system media volume
         val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         val pool = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()
@@ -100,7 +103,7 @@ class MainActivity : FlutterActivity() {
 
     private fun play(soundId: Int, volume: Float) {
         val pool = soundPool ?: return
-        if (soundId == 0) return
+        if (soundId == 0 || volume <= 0.001f) return
         pool.play(soundId, volume, volume, 1, 0, 1.0f)
     }
 
@@ -137,5 +140,5 @@ if not mains:
     print("[sound_fix] WARNING: MainActivity.kt not found")
 else:
     mains[0].write_text(MAIN_KT, encoding="utf-8")
-    print(f"[sound_fix] wrote {mains[0]}")
+    print(f"[sound_fix] wrote {mains[0]} USAGE_MEDIA")
 print("sound_fix done")
