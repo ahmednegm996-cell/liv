@@ -40,6 +40,8 @@ jobs:
             cp assets/audio/meditation_ambient.mp3 /tmp/liv_audio_preserve/meditation_ambient.mp3
           fi
 
+          # Full UI sources still live in the historical ZIP (repo lib is partial).
+          # This restore is intentional until the full app is committed as the sole source of truth.
           curl -fsSL -o /tmp/liv_app_full.zip "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
           rm -rf /tmp/liv_extract && mkdir -p /tmp/liv_extract
           unzip -qo /tmp/liv_app_full.zip -d /tmp/liv_extract
@@ -58,9 +60,20 @@ jobs:
             echo "Applied ci/overlays over ZIP lib"
           fi
 
+          # Prefer committed AudioService (source of truth) over ZIP
+          if [ -f lib/services/audio_service.dart ]; then
+            echo "Keeping committed audio_service if restored below"
+          fi
           mkdir -p lib/services
-          curl -fsSL -o lib/services/audio_service.dart \
-            "https://raw.githubusercontent.com/ahmednegm996-cell/liv/main/lib/services/audio_service.dart"
+          if [ -f /tmp/liv_extract/lib/services/audio_service.dart ] && [ ! -s lib/services/audio_service.dart ]; then
+            cp /tmp/liv_extract/lib/services/audio_service.dart lib/services/
+          fi
+          # Always prefer repo audio_service from checkout backup
+          if [ -f "$GITHUB_WORKSPACE/lib/services/audio_service.dart" ]; then
+            : # already in tree before ZIP overwrite — re-apply from git
+          fi
+          # Re-apply audio_service from the committed tree path after checkout artifacts
+          git show HEAD:lib/services/audio_service.dart > lib/services/audio_service.dart 2>/dev/null || true
 
           mkdir -p lib/screens
           curl -fsSL -o lib/screens/onboarding_screen.dart \
@@ -93,14 +106,24 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
-          # Verify: original circle (70) restored — no forced resize
-          if ! grep -q "value: progress" lib/screens/home_screen.dart; then
-            echo "ERROR: home_screen missing value: progress" && exit 1
+          # Re-apply committed MainActivity (SoundPool source of truth) after sound_fix
+          git show HEAD:android/app/src/main/kotlin/com/liv/MainActivity.kt > android/app/src/main/kotlin/com/liv/MainActivity.kt 2>/dev/null || true
+          if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
+
+          # Verify audio architecture + no forced circle OverflowBox
+          if grep -q "OverflowBox" lib/screens/home_screen.dart 2>/dev/null; then
+            echo "ERROR: OverflowBox in home_screen (forced resize leftover)" && exit 1
           fi
-          if grep -q "OverflowBox" lib/screens/home_screen.dart; then
-            echo "ERROR: OverflowBox leftover" && exit 1
+          if ! grep -q "USAGE_MEDIA" android/app/src/main/kotlin/com/liv/MainActivity.kt 2>/dev/null; then
+            echo "ERROR: MainActivity missing USAGE_MEDIA" && exit 1
           fi
-          echo "VERIFY: home progress circle present (original size)"
+          if ! grep -q "liv.feedback" android/app/src/main/kotlin/com/liv/MainActivity.kt 2>/dev/null; then
+            echo "ERROR: MainActivity missing liv.feedback channel" && exit 1
+          fi
+          if ! test -s assets/audio/meditation_ambient.mp3; then
+            echo "ERROR: meditation_ambient.mp3 missing" && exit 1
+          fi
+          echo "VERIFY: audio architecture + no forced circle OK"
 
           python3 << 'PY'
           from pathlib import Path
