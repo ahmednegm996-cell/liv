@@ -97,14 +97,20 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
-          # Hard verify: today-progress circle must be enlarged by feature_patch
+          # Hard verify: visual ring enlarged via OverflowBox; layout slot stays 70
           if ! grep -q "value: progress" lib/screens/home_screen.dart; then
             echo "ERROR: home_screen missing value: progress (wrong file after ZIP?)" && exit 1
           fi
-          if ! grep -q "width: 130" lib/screens/home_screen.dart; then
-            echo "ERROR: progress circle width is not 130 — feature_patch did not apply" && exit 1
+          if ! grep -q "OverflowBox" lib/screens/home_screen.dart; then
+            echo "ERROR: progress circle OverflowBox missing — feature_patch did not apply" && exit 1
           fi
-          echo "VERIFY: home progress circle width=130 OK"
+          if ! grep -q "width: 118" lib/screens/home_screen.dart; then
+            echo "ERROR: visual circle width 118 missing" && exit 1
+          fi
+          if ! grep -q "width: 70" lib/screens/home_screen.dart; then
+            echo "ERROR: layout slot width 70 missing — card may be enlarged" && exit 1
+          fi
+          echo "VERIFY: progress circle layout=70 visual=118 OK"
 
           python3 << 'PY'
           from pathlib import Path
