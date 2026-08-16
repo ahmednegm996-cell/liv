@@ -306,12 +306,16 @@ class _AIChatScreenState extends State<AIChatScreen> {
             child: Column(
               children: [
                 _header(state, accent, danger),
+                // Fixed suggestions — not inside the scrolling ListView
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
+                  child: _quickPrompts(accent, isDark),
+                ),
                 Expanded(
                   child: ListView(
                     controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 18),
                     children: [
-                      _quickPrompts(accent, isDark),
                       ..._messages.map((m) => _bubble(m, accent)),
                       if (_sending)
                         const Padding(
