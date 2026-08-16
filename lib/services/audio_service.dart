@@ -23,6 +23,9 @@ class AudioService with WidgetsBindingObserver {
   bool get isPlaying => _player.state == PlayerState.playing;
   String? get currentAsset => _currentAsset;
 
+  /// Gain passed to native SoundPool (0 when muted).
+  double get _feedbackGain => _muted ? 0.0 : _targetVolume.clamp(0.0, 1.0);
+
   void ensureLifecycleObserver() {
     if (_lifecycleAttached) return;
     _lifecycleAttached = true;
@@ -38,10 +41,10 @@ class AudioService with WidgetsBindingObserver {
     }
   }
 
-  /// Age picker: deeper soft tick (native SoundPool, sonification stream).
+  /// Age picker tick — media stream; follows AudioService volume/mute.
   Future<void> tick() async {
     try {
-      await _feedbackChannel.invokeMethod<void>('tick');
+      await _feedbackChannel.invokeMethod<void>('tick', {'volume': _feedbackGain});
       return;
     } catch (_) {}
     try {
@@ -49,10 +52,10 @@ class AudioService with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  /// Normal UI buttons: soft premium click (native SoundPool).
+  /// UI button click — media stream; follows AudioService volume/mute.
   Future<void> buttonClick() async {
     try {
-      await _feedbackChannel.invokeMethod<void>('buttonClick');
+      await _feedbackChannel.invokeMethod<void>('buttonClick', {'volume': _feedbackGain});
       return;
     } catch (_) {}
     try {
