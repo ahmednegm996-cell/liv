@@ -38,7 +38,7 @@ class AudioService with WidgetsBindingObserver {
     }
   }
 
-  /// Age picker: deeper bass tick (native).
+  /// Age picker: deeper soft tick (native SoundPool, sonification stream).
   Future<void> tick() async {
     try {
       await _feedbackChannel.invokeMethod<void>('tick');
@@ -47,12 +47,9 @@ class AudioService with WidgetsBindingObserver {
     try {
       await HapticFeedback.mediumImpact();
     } catch (_) {}
-    try {
-      await SystemSound.play(SystemSoundType.click);
-    } catch (_) {}
   }
 
-  /// Normal UI buttons: lighter premium click (native).
+  /// Normal UI buttons: soft premium click (native SoundPool).
   Future<void> buttonClick() async {
     try {
       await _feedbackChannel.invokeMethod<void>('buttonClick');
@@ -60,9 +57,6 @@ class AudioService with WidgetsBindingObserver {
     } catch (_) {}
     try {
       await HapticFeedback.selectionClick();
-    } catch (_) {}
-    try {
-      await SystemSound.play(SystemSoundType.click);
     } catch (_) {}
   }
 
