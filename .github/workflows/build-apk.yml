@@ -97,6 +97,15 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
+          # Hard verify: today-progress circle must be enlarged by feature_patch
+          if ! grep -q "value: progress" lib/screens/home_screen.dart; then
+            echo "ERROR: home_screen missing value: progress (wrong file after ZIP?)" && exit 1
+          fi
+          if ! grep -q "width: 130" lib/screens/home_screen.dart; then
+            echo "ERROR: progress circle width is not 130 — feature_patch did not apply" && exit 1
+          fi
+          echo "VERIFY: home progress circle width=130 OK"
+
           python3 << 'PY'
           from pathlib import Path
           import re
