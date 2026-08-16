@@ -155,17 +155,22 @@ if home.exists():
     )
     new = (
         "                  SizedBox(\n"
-        "                    width: 80,\n"
-        "                    height: 80,\n"
+        "                    width: 88,\n"
+        "                    height: 88,\n"
         "                    child: Stack(\n"
         "                      alignment: Alignment.center,\n"
         "                      children: [\n"
         "                        CircularProgressIndicator(\n"
         "                          value: progress,\n"
-        "                          strokeWidth: 6.5,"
+        "                          strokeWidth: 7,"
     )
     if old in t:
         home.write_text(t.replace(old, new, 1), encoding="utf-8")
-        print("home: circle 70→80")
+        print("home: circle 70→88")
+    elif "width: 80," in t and "CircularProgressIndicator" in t:
+        t = t.replace("width: 80,", "width: 88,", 1).replace("height: 80,", "height: 88,", 1)
+        t = t.replace("strokeWidth: 6.5,", "strokeWidth: 7,", 1)
+        home.write_text(t, encoding="utf-8")
+        print("home: circle 80→88")
 
 print("feature_patch done OK")
