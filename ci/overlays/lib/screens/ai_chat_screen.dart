@@ -85,7 +85,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
   List<Map<String, String>> _parseAddTags(String reply) {
     final out = <Map<String, String>>[];
-    final re = RegExp(r'\[ADD_(GOOD|BAD|TASK):([^\]]+)\]');
+    final re = RegExp(r'\[ADD_(GOOD|BAD|TASK|DREAM):([^\]]+)\]');
     for (final m in re.allMatches(reply)) {
       final name = m.group(2)!.trim();
       if (name.isEmpty) continue;
@@ -97,40 +97,87 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
   String _stripAddTags(String reply) {
     return reply
-        .replaceAll(RegExp(r'\s*\[ADD_(GOOD|BAD|TASK):[^\]]+\]\s*'), ' ')
+        .replaceAll(RegExp(r'\s*\[ADD_(GOOD|BAD|TASK|DREAM):[^\]]+\]\s*'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 
-  Future<void> _applyAllActions() async {
-    if (_pendingActions.isEmpty) return;
+  String _norm(String s) =>
+      s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  bool _isSame(String a, String b) {
+    final x = _norm(a);
+    final y = _norm(b);
+    if (x.isEmpty || y.isEmpty) return false;
+    if (x == y) return true;
+    if (x.length >= 4 && y.length >= 4 && (x.contains(y) || y.contains(x))) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _alreadyExists(String type, String name) {
     final state = context.read<AppState>();
-    final actions = List<Map<String, String>>.from(_pendingActions);
+    if (type == 'TASK') {
+      return state.tasks.any((t) => _isSame(t.title, name));
+    }
+    if (type == 'GOOD' || type == 'BAD') {
+      final wantGood = type == 'GOOD';
+      return state.habits.any((h) => h.isGood == wantGood && _isSame(h.name, name));
+    }
+    if (type == 'DREAM') {
+      return state.dreams.any((d) => _isSame(d.title, name));
+    }
+    return false;
+  }
+
+  List<Map<String, String>> _filterNew(List<Map<String, String>> actions) {
+    return actions.where((a) {
+      final name = a['name'] ?? '';
+      final type = a['type'] ?? '';
+      if (name.isEmpty || type.isEmpty) return false;
+      return !_alreadyExists(type, name);
+    }).toList();
+  }
+
+  Future<void> _applyByType(String type) async {
+    final batch = _pendingActions.where((a) => a['type'] == type).toList();
+    if (batch.isEmpty) return;
+    final state = context.read<AppState>();
     final added = <String>[];
-    for (final action in actions) {
+    for (final action in batch) {
       final name = action['name'] ?? '';
-      if (name.isEmpty) continue;
+      if (name.isEmpty || _alreadyExists(type, name)) continue;
       try {
-        final type = action['type'];
         if (type == 'GOOD') {
           await state.addHabit(name, true);
-          added.add('عادة جيدة: $name');
+          added.add(name);
         } else if (type == 'BAD') {
           await state.addHabit(name, false);
-          added.add('عادة سيئة: $name');
+          added.add(name);
         } else if (type == 'TASK') {
           await state.addWeeklyTask(name);
-          added.add('مهمة: $name');
+          added.add(name);
+        } else if (type == 'DREAM') {
+          await state.addDreamWithAISteps(name, '');
+          added.add(name);
         }
       } catch (_) {}
     }
     if (!mounted) return;
     setState(() {
-      _pendingActions = [];
+      _pendingActions.removeWhere((a) => a['type'] == type);
       if (added.isNotEmpty) {
+        final label = type == 'TASK'
+            ? 'المهام'
+            : type == 'DREAM'
+                ? 'الأحلام'
+                : type == 'BAD'
+                    ? 'العادات السيئة'
+                    : 'العادات';
         _messages.add({
           'role': 'assistant',
-          'text': 'تمت الإضافة ✓\n${added.map((e) => '• $e').join('\n')}',
+          'text': 'تمت الإضافة إلى $label ✓\n${added.map((e) => '• $e').join('\n')}',
         });
       }
     });
@@ -171,7 +218,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
             .map((m) => {'role': m['role']!, 'text': m['text']!})
             .toList(),
       );
-      final actions = _parseAddTags(reply);
+      final actions = _filterNew(_parseAddTags(reply));
       final clean = _stripAddTags(reply);
       if (!mounted) return;
       setState(() {
@@ -274,7 +321,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                             child: _Typing(),
                           ),
                         ),
-                      if (_pendingActions.isNotEmpty) _addAllButton(accent),
+                      if (_pendingActions.isNotEmpty) _actionButtons(accent),
                     ],
                   ),
                 ),
@@ -364,22 +411,50 @@ class _AIChatScreenState extends State<AIChatScreen> {
     );
   }
 
-  Widget _addAllButton(Color accent) {
+  Widget _actionButtons(Color accent) {
+    final types = <String>[];
+    for (final a in _pendingActions) {
+      final t = a['type'];
+      if (t != null && !types.contains(t)) types.add(t);
+    }
+    String labelFor(String type) {
+      switch (type) {
+        case 'TASK':
+          return 'إضافة للمهمات';
+        case 'GOOD':
+          return 'إضافة للعادات';
+        case 'BAD':
+          return 'إضافة للعادات السيئة';
+        case 'DREAM':
+          return 'إضافة للأحلام';
+        default:
+          return 'إضافة';
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          onPressed: _applyAllActions,
-          icon: const Icon(Icons.playlist_add_check_rounded, size: 20),
-          label: const Text('إضافة الكل إلى المهام'),
-          style: FilledButton.styleFrom(
-            backgroundColor: accent,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final type in types)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: FilledButton.icon(
+                onPressed: () => _applyByType(type),
+                icon: const Icon(Icons.playlist_add_check_rounded, size: 20),
+                label: Text(labelFor(type)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
