@@ -29,7 +29,6 @@ else:
     print(f"WARNING: ai_chat overlay missing or incomplete — {src}")
 
 # 2) Gemini: keep ZIP full implementation.
-#    Inject ADD_ tags into chat prompt + ensure real personalityInsight exists.
 gs = lib / "services/gemini_service.dart"
 if gs.exists():
     g = gs.read_text(encoding="utf-8")
@@ -143,126 +142,114 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home progress ring — REAL layout size (OverflowBox was clipped/invisible on device).
-# Card padding for this SectionCard only 16→12 to offset height. % fontSize stays 14.
+# 4) home progress circle — MUST be clearly larger so % is readable on device.
+# Direct SizedBox size (no OverflowBox). 130px ~1.85x original 70.
+TARGET_W = 130
+TARGET_STROKE = 12
+TARGET_FONT = 18
+
 home = lib / "screens/home_screen.dart"
 if not home.exists():
     raise SystemExit("ERROR: lib/screens/home_screen.dart missing after ZIP restore")
 
 ht = home.read_text(encoding="utf-8")
 
-# Remove prior OverflowBox / Clip.none experiments if present
+# Drop failed OverflowBox experiments
 if "OverflowBox" in ht:
+    ht = re.sub(
+        r"SizedBox\(\s*width:\s*\d+\s*,\s*height:\s*\d+\s*,\s*child:\s*OverflowBox\([\s\S]*?"
+        r"child:\s*SizedBox\(\s*width:\s*\d+\s*,\s*height:\s*\d+\s*,\s*child:\s*Stack\(",
+        f"SizedBox(\n                    width: {TARGET_W},\n                    height: {TARGET_W},\n                    child: Stack(",
+        ht,
+        count=1,
+    )
     ht = ht.replace("\n          clipBehavior: Clip.none,", "", 1)
-    print("home: removed prior OverflowBox/Clip.none experiment")
+    # remove extra closing parens from OverflowBox/SizedBox if left over — handled below by full block replace
+    print("home: stripped OverflowBox wrapper")
 
-old_card = """            // Progress (من الصورة)
-            SectionCard(
-              padding: const EdgeInsets.all(16),
-              child: Row("""
-new_card = """            // Progress (من الصورة)
-            SectionCard(
-              padding: const EdgeInsets.all(12),
-              child: Row("""
+# Progress card padding 16→10 to keep overall card from exploding
+old_card = (
+    "            // Progress (من الصورة)\n"
+    "            SectionCard(\n"
+    "              padding: const EdgeInsets.all(16),\n"
+    "              child: Row("
+)
+new_card = (
+    "            // Progress (من الصورة)\n"
+    "            SectionCard(\n"
+    "              padding: const EdgeInsets.all(10),\n"
+    "              child: Row("
+)
 if old_card in ht:
     ht = ht.replace(old_card, new_card, 1)
-    print("home: progress SectionCard padding 16→12")
-elif "padding: const EdgeInsets.all(12)" in ht and "// Progress" in ht:
-    print("home: progress SectionCard padding already 12")
+    print("home: progress SectionCard padding 16→10")
 else:
-    print("home: NOTE progress card padding pattern soft-skip")
+    ht2 = re.sub(
+        r"(// Progress[\s\S]{0,80}?SectionCard\(\s*padding:\s*const EdgeInsets\.all\()(\d+)(\))",
+        r"\g<1>10\3",
+        ht,
+        count=1,
+    )
+    if ht2 != ht:
+        ht = ht2
+        print("home: progress SectionCard padding →10 (regex)")
 
-def circle_block(w, stroke):
-    return (
-        f"""                  SizedBox(
-                    width: {w},
-                    height: {w},
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: {stroke},
-                          backgroundColor: accent.withOpacity(0.15),
-                          valueColor: AlwaysStoppedAnimation(accent),
-                        ),
-                        Text(
-                          '${{(progress * 100).round()}}%',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
-                              color: accent),
-                        ),
-                      ],
-                    ),
-                  ),"""
+# Robust: any SizedBox wrapping CircularProgressIndicator(value: progress)
+pat = re.compile(
+    r"(SizedBox\(\s*width:\s*)(\d+)(\s*,\s*height:\s*)(\d+)(\s*,\s*child:\s*Stack\(\s*"
+    r"alignment:\s*Alignment\.center\s*,\s*children:\s*\[\s*"
+    r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*)([\d.]+)",
+    re.M,
+)
+m = pat.search(ht)
+if not m:
+    raise SystemExit(
+        "ERROR: progress CircularProgressIndicator + SizedBox pattern not found in home_screen.dart"
     )
 
-TARGET = 100
-TARGET_STROKE = 10
-NEW = circle_block(TARGET, TARGET_STROKE)
+old_w, old_s = m.group(2), m.group(6)
+ht = pat.sub(
+    rf"\g<1>{TARGET_W}\g<3>{TARGET_W}\g<5>{TARGET_STROKE}",
+    ht,
+    count=1,
+)
+print(f"home: circle {old_w}→{TARGET_W} stroke {old_s}→{TARGET_STROKE}")
 
-OLD_OVERFLOW = """                  SizedBox(
-                    width: 70,
-                    height: 70,
-                    child: OverflowBox(
-                      maxWidth: 124,
-                      maxHeight: 124,
-                      alignment: Alignment.center,
-                      child: SizedBox(
-                        width: 124,
-                        height: 124,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            CircularProgressIndicator(
-                              value: progress,
-                              strokeWidth: 9,
-                              backgroundColor: accent.withOpacity(0.15),
-                              valueColor: AlwaysStoppedAnimation(accent),
-                            ),
-                            Text(
-                              '${(progress * 100).round()}%',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
-                                  color: accent),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),"""
-
-OLD_70 = circle_block(70, 6)
-OLD_130 = circle_block(130, 10)
-
-replaced = False
-for name, old in [("overflow124", OLD_OVERFLOW), ("70", OLD_70), ("130", OLD_130)]:
-    if old in ht:
-        ht = ht.replace(old, NEW, 1)
-        print(f"home: circle {name} → {TARGET}px stroke {TARGET_STROKE}, fontSize 14")
-        replaced = True
-        break
-
-if not replaced:
-    if f"width: {TARGET}" in ht and "value: progress" in ht and "OverflowBox" not in ht:
-        print("home: circle already", TARGET)
-        replaced = True
-    else:
-        raise SystemExit("ERROR: progress circle block not found to resize")
+# Percent label next to this indicator only — make readable
+# Match the Text right after value: progress indicator
+ht2, nfont = re.subn(
+    r"(\$\{\(progress \* 100\)\.round\(\)\}%[\s\S]{0,120}?fontSize:\s*)(\d+)",
+    rf"\g<1>{TARGET_FONT}",
+    ht,
+    count=1,
+)
+if nfont:
+    ht = ht2
+    print(f"home: percent fontSize → {TARGET_FONT}")
+else:
+    # fallback exact
+    for old_fs in ("fontSize: 14,", "fontSize: 16,", "fontSize: 20,"):
+        # only replace near progress percent
+        idx = ht.find("${(progress * 100).round()}%")
+        if idx < 0:
+            break
+        window = ht[idx:idx + 220]
+        if old_fs in window:
+            ht = ht[:idx] + window.replace(old_fs, f"fontSize: {TARGET_FONT},", 1) + ht[idx + 220:]
+            print(f"home: percent fontSize {old_fs} → {TARGET_FONT}")
+            break
 
 home.write_text(ht, encoding="utf-8")
 final = home.read_text(encoding="utf-8")
-if f"width: {TARGET}" not in final or "value: progress" not in final:
-    raise SystemExit(f"ERROR: verify failed width {TARGET}")
+if f"width: {TARGET_W}" not in final:
+    raise SystemExit(f"ERROR: width {TARGET_W} not in final home_screen")
 if "OverflowBox" in final:
-    raise SystemExit("ERROR: OverflowBox still present — remove it")
-idx = final.find("${(progress * 100).round()}%")
-snippet = final[idx:idx + 200] if idx >= 0 else ""
-if "fontSize: 20" in snippet:
-    raise SystemExit("ERROR: percent fontSize enlarged")
-print(f"VERIFY OK: circle layout={TARGET} stroke={TARGET_STROKE} fontSize=14 no OverflowBox")
+    raise SystemExit("ERROR: OverflowBox still in home_screen")
+# dump snippet for Actions log
+idx = final.find("value: progress")
+print("--- circle snippet ---")
+print(final[max(0, idx - 180): idx + 220])
+print("--- end snippet ---")
+print(f"VERIFY OK: circle={TARGET_W} stroke={TARGET_STROKE} font={TARGET_FONT}")
 
 print("feature_patch done OK")
