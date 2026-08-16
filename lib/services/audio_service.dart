@@ -9,8 +9,8 @@ class AudioService with WidgetsBindingObserver {
 
   static const MethodChannel _feedbackChannel = MethodChannel('liv.feedback');
 
-  /// Single shared volume for the meditation background track everywhere.
-  static const double meditationVolume = 0.85;
+  /// Near-original MP3 level. Never exceed 1.0 (no digital boost/clip).
+  static const double meditationVolume = 1.0;
 
   final AudioPlayer _player = AudioPlayer();
   String? _currentAsset;
