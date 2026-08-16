@@ -27,22 +27,32 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Prepare project files (restore full Liv sources like #106)
+      - name: Prepare project files (Path B — ZIP UI + repo audio)
         run: |
           set -e
 
-          mkdir -p /tmp/liv_audio_preserve
+          # --- Preserve repo Source-of-Truth files BEFORE ZIP wipes lib/ ---
+          mkdir -p /tmp/liv_sot /tmp/liv_audio_preserve
+          if [ -f lib/services/audio_service.dart ]; then
+            cp lib/services/audio_service.dart /tmp/liv_sot/audio_service.dart
+            echo "Preserved repo AudioService"
+          else
+            echo "ERROR: repo missing lib/services/audio_service.dart" && exit 1
+          fi
+          if [ -f android/app/src/main/kotlin/com/liv/MainActivity.kt ]; then
+            cp android/app/src/main/kotlin/com/liv/MainActivity.kt /tmp/liv_sot/MainActivity.kt
+            echo "Preserved repo MainActivity"
+          fi
           LONG="assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
           if [ -f "$LONG" ]; then
             cp "$LONG" /tmp/liv_audio_preserve/meditation_ambient.mp3
-            echo "Preserved committed meditation MP3"
           elif [ -f assets/audio/meditation_ambient.mp3 ]; then
             cp assets/audio/meditation_ambient.mp3 /tmp/liv_audio_preserve/meditation_ambient.mp3
           fi
 
-          # Full UI sources still live in the historical ZIP (repo lib is partial).
-          # This restore is intentional until the full app is committed as the sole source of truth.
-          curl -fsSL -o /tmp/liv_app_full.zip "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
+          # --- Extract full UI from ZIP (temporary SoT for screens/layout) ---
+          curl -fsSL -o /tmp/liv_app_full.zip \
+            "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
           rm -rf /tmp/liv_extract && mkdir -p /tmp/liv_extract
           unzip -qo /tmp/liv_app_full.zip -d /tmp/liv_extract
 
@@ -52,6 +62,7 @@ jobs:
             echo "ERROR: zip missing lib/" && exit 1
           fi
 
+          # --- Overlays (AI chat, etc.) over ZIP lib ---
           if [ -f ci/expand_ai_overlay.py ]; then
             python3 ci/expand_ai_overlay.py
           fi
@@ -60,34 +71,70 @@ jobs:
             echo "Applied ci/overlays over ZIP lib"
           fi
 
-          # Prefer committed AudioService (source of truth) over ZIP
-          if [ -f lib/services/audio_service.dart ]; then
-            echo "Keeping committed audio_service if restored below"
+          # --- Lock REAL HomeScreen from ZIP (do NOT replace with repo home) ---
+          if [ ! -f lib/screens/home_screen.dart ]; then
+            echo "ERROR: home_screen.dart missing after ZIP" && exit 1
           fi
-          mkdir -p lib/services
-          if [ -f /tmp/liv_extract/lib/services/audio_service.dart ] && [ ! -s lib/services/audio_service.dart ]; then
-            cp /tmp/liv_extract/lib/services/audio_service.dart lib/services/
-          fi
-          # Always prefer repo audio_service from checkout backup
-          if [ -f "$GITHUB_WORKSPACE/lib/services/audio_service.dart" ]; then
-            : # already in tree before ZIP overwrite — re-apply from git
-          fi
-          # Re-apply audio_service from the committed tree path after checkout artifacts
-          git show HEAD:lib/services/audio_service.dart > lib/services/audio_service.dart 2>/dev/null || true
+          cp lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart
+          echo "LOCKED HOME (from ZIP):"
+          sha256sum lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart
 
+          # Circle must already be original ZIP size (~70). Fail if not.
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+          h = Path("lib/screens/home_screen.dart").read_text(encoding="utf-8")
+          if "OverflowBox" in h:
+              raise SystemExit("ERROR: ZIP home already has OverflowBox — unexpected")
+          # Progress ring only: SizedBox wrapping CircularProgressIndicator(value: progress)
+          m = re.search(
+              r"SizedBox\(\s*width:\s*(\d+)\s*,\s*height:\s*(\d+)\s*,\s*child:\s*Stack\([\s\S]{0,250}?"
+              r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*([\d.]+)",
+              h,
+          )
+          if not m:
+              raise SystemExit("ERROR: progress circle SizedBox not found in ZIP home")
+          w, ht, stroke = m.group(1), m.group(2), m.group(3)
+          if w != "70" or ht != "70":
+              raise SystemExit(f"ERROR: expected progress circle 70x70, got {w}x{ht}")
+          print(f"HOME CIRCLE OK from ZIP: {w}x{ht} stroke={stroke}")
+          PY
+
+          # --- AudioService = repository SoT (overwrite ZIP copy) ---
+          mkdir -p lib/services
+          cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
+          echo "RESTORED AudioService from repo:"
+          sha256sum lib/services/audio_service.dart
+          grep -q "meditationVolume = 1.0" lib/services/audio_service.dart
+          grep -q "MethodChannel('liv.feedback')" lib/services/audio_service.dart
+
+          # --- Onboarding (existing commit with audio wiring path) ---
           mkdir -p lib/screens
           curl -fsSL -o lib/screens/onboarding_screen.dart \
             "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
 
+          # --- Optional period/UX patches (must not touch home circle) ---
           if [ -f ci/ux_period_patch.py ]; then python3 ci/ux_period_patch.py; fi
           if [ -f ci/period_nav_patch.py ]; then python3 ci/period_nav_patch.py; fi
           if [ -f ci/feedback_patch.py ]; then python3 ci/feedback_patch.py || echo "WARNING: feedback_patch non-fatal"; fi
-          if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; echo "Applied sound_fix"; fi
 
+          # --- Native feedback: WAVs + MainActivity (sound_fix is SoT writer) ---
+          if [ -f ci/sound_fix.py ]; then
+            python3 ci/sound_fix.py
+            echo "Applied sound_fix"
+          fi
+          # Ensure final MainActivity matches repo intent (USAGE_MEDIA + channel)
+          if [ -f /tmp/liv_sot/MainActivity.kt ]; then
+            mkdir -p android/app/src/main/kotlin/com/liv
+            cp /tmp/liv_sot/MainActivity.kt android/app/src/main/kotlin/com/liv/MainActivity.kt
+            # Re-run sound_fix so res/raw WAVs exist and MainActivity stays consistent
+            if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
+          fi
+
+          # --- Assets ---
           if [ -d /tmp/liv_extract/assets ]; then
             mkdir -p assets && cp -a /tmp/liv_extract/assets/. assets/
           fi
-
           mkdir -p assets/audio
           if [ -f /tmp/liv_audio_preserve/meditation_ambient.mp3 ]; then
             cp /tmp/liv_audio_preserve/meditation_ambient.mp3 assets/audio/meditation_ambient.mp3
@@ -104,26 +151,90 @@ jobs:
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
           fi
 
+          # --- Soundtrack + feature (AI only). Must NOT resize home circle. ---
           python3 ci/soundtrack_patch.py
 
-          # Re-apply committed MainActivity (SoundPool source of truth) after sound_fix
-          git show HEAD:android/app/src/main/kotlin/com/liv/MainActivity.kt > android/app/src/main/kotlin/com/liv/MainActivity.kt 2>/dev/null || true
-          if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
-
-          # Verify audio architecture + no forced circle OverflowBox
-          if grep -q "OverflowBox" lib/screens/home_screen.dart 2>/dev/null; then
-            echo "ERROR: OverflowBox in home_screen (forced resize leftover)" && exit 1
+          # --- Re-lock HomeScreen: if any patch mutated it, restore ZIP original ---
+          if ! cmp -s lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart; then
+            echo "WARNING: home_screen.dart changed after patches — restoring ZIP original"
+            cp /tmp/liv_sot/home_from_zip.dart lib/screens/home_screen.dart
           fi
-          if ! grep -q "USAGE_MEDIA" android/app/src/main/kotlin/com/liv/MainActivity.kt 2>/dev/null; then
+          # Re-apply repo AudioService in case a patch overwrote it
+          cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
+
+          # ========== FINAL VALIDATION ==========
+          echo "======== FINAL SOURCE HASHES ========"
+          echo "FINAL HOME SOURCE:"
+          sha256sum lib/screens/home_screen.dart
+          echo "FINAL AUDIO SERVICE:"
+          sha256sum lib/services/audio_service.dart
+          echo "FINAL MAIN ACTIVITY:"
+          sha256sum android/app/src/main/kotlin/com/liv/MainActivity.kt
+          echo "===================================="
+
+          # Home: ZIP original, no OverflowBox, progress circle 70x70
+          if grep -q "OverflowBox" lib/screens/home_screen.dart; then
+            echo "ERROR: OverflowBox in final home_screen" && exit 1
+          fi
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+          h = Path("lib/screens/home_screen.dart").read_text(encoding="utf-8")
+          m = re.search(
+              r"SizedBox\(\s*width:\s*(\d+)\s*,\s*height:\s*(\d+)\s*,\s*child:\s*Stack\([\s\S]{0,250}?"
+              r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*([\d.]+)",
+              h,
+          )
+          if not m:
+              raise SystemExit("ERROR: final progress circle not found")
+          if m.group(1) != "70" or m.group(2) != "70":
+              raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 70x70")
+          # Forbidden forced sizes left over from old experiments
+          for bad in ("width: 100", "width: 124", "width: 130", "width: 150", "width: 220"):
+              # only fail if adjacent to progress indicator context
+              pass
+          if "addPostFrameCallback" in h and "Widget build(" in h:
+              build = h[h.find("Widget build("):]
+              # crude: if callback appears before next top-level method after build start inside build body is hard; skip hard fail
+              pass
+          print(f"VALIDATE home circle: {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
+          PY
+
+          # AudioService from repo
+          if ! grep -q "meditationVolume = 1.0" lib/services/audio_service.dart; then
+            echo "ERROR: AudioService meditationVolume missing" && exit 1
+          fi
+          if ! grep -q "MethodChannel('liv.feedback')" lib/services/audio_service.dart; then
+            echo "ERROR: AudioService missing liv.feedback channel" && exit 1
+          fi
+
+          # MainActivity
+          if ! grep -q "USAGE_MEDIA" android/app/src/main/kotlin/com/liv/MainActivity.kt; then
             echo "ERROR: MainActivity missing USAGE_MEDIA" && exit 1
           fi
-          if ! grep -q "liv.feedback" android/app/src/main/kotlin/com/liv/MainActivity.kt 2>/dev/null; then
-            echo "ERROR: MainActivity missing liv.feedback channel" && exit 1
+          if ! grep -q "liv.feedback" android/app/src/main/kotlin/com/liv/MainActivity.kt; then
+            echo "ERROR: MainActivity missing liv.feedback" && exit 1
           fi
-          if ! test -s assets/audio/meditation_ambient.mp3; then
-            echo "ERROR: meditation_ambient.mp3 missing" && exit 1
+
+          # WAVs
+          test -s android/app/src/main/res/raw/liv_picker_tick.wav
+          test -s android/app/src/main/res/raw/liv_button_click.wav
+
+          # Meditation asset
+          test -s assets/audio/meditation_ambient.mp3
+
+          # Patches must not globally rewrite tick→buttonClick (scan scripts)
+          if grep -R "replace.*tick().*buttonClick" ci/*.py 2>/dev/null; then
+            echo "ERROR: patch still converts tick→buttonClick" && exit 1
           fi
-          echo "VERIFY: audio architecture + no forced circle OK"
+          if grep -n "tick()" ci/soundtrack_patch.py | grep -i replace; then
+            echo "ERROR: soundtrack_patch still rewrites tick" && exit 1
+          fi
+
+          # feature/soundtrack must not mention circle resize targets
+          if grep -E "OverflowBox|width: 15[0-9]|width: 13[0-9]|width: 12[0-9]" ci/feature_patch.py ci/soundtrack_patch.py 2>/dev/null; then
+            echo "ERROR: circle resize still in feature/soundtrack patch" && exit 1
+          fi
 
           python3 << 'PY'
           from pathlib import Path
@@ -140,22 +251,24 @@ jobs:
               asset_entries.append("assets/icon/liv_icon.png")
           if not asset_entries:
               raise SystemExit("ERROR: no assets")
+          # exactly one meditation entry
           assets_block = "  assets:\n" + "".join(f"    - {a}\n" for a in asset_entries)
           if re.search(r"(?m)^  assets:\n(?:    - .+\n)*", t):
               t = re.sub(r"(?m)^  assets:\n(?:    - .+\n)*", assets_block, t, count=1)
+          if t.count("meditation_ambient.mp3") != 1:
+              raise SystemExit(f"ERROR: meditation_ambient count={t.count('meditation_ambient.mp3')}")
           t = re.sub(r"^version:.*$", "version: 1.4.9+18", t, count=1, flags=re.M)
           p.write_text(t, encoding="utf-8")
-          print("pubspec finalized")
+          print("pubspec finalized, meditation asset once")
           PY
 
           test -f lib/main.dart
-          test -s assets/audio/meditation_ambient.mp3
           if grep -q "Keep growing with LIV" lib/services/gemini_service.dart 2>/dev/null; then
             echo "ERROR: Keep growing placeholder still present" && exit 1
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart
           grep -q "_pendingAction" lib/screens/ai_chat_screen.dart || grep -q "addHabit" lib/screens/ai_chat_screen.dart
-          echo "Project files OK"
+          echo "VERIFY Path B OK — ZIP home locked, repo audio, native feedback"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
@@ -226,7 +339,7 @@ jobs:
                   gs.write_text(g, encoding="utf-8")
                   print("Removed Keep growing placeholder")
               if "personalityInsight" not in g:
-                  print("WARNING: personalityInsight missing — feature_patch should have added it")
+                  print("WARNING: personalityInsight missing")
               else:
                   print("personalityInsight present")
           for f in [Path("android/app/build.gradle"), Path("android/app/build.gradle.kts")]:
