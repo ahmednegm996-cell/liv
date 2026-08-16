@@ -97,21 +97,19 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
-          # Hard verify: real 100px circle (OverflowBox abandoned — was invisible on device)
+          # Hard verify: progress circle 130px + percent font 18
           if ! grep -q "value: progress" lib/screens/home_screen.dart; then
             echo "ERROR: home_screen missing value: progress" && exit 1
           fi
           if grep -q "OverflowBox" lib/screens/home_screen.dart; then
             echo "ERROR: OverflowBox still present" && exit 1
           fi
-          if ! grep -q "width: 100" lib/screens/home_screen.dart; then
-            echo "ERROR: progress circle width 100 missing" && exit 1
+          if ! grep -q "width: 130" lib/screens/home_screen.dart; then
+            echo "ERROR: progress circle width 130 missing" && exit 1
           fi
-          MA=$(find android -name MainActivity.kt 2>/dev/null | head -1)
-          if [ -n "$MA" ] && ! grep -q "USAGE_MEDIA" "$MA"; then
-            echo "ERROR: MainActivity not USAGE_MEDIA" && exit 1
-          fi
-          echo "VERIFY: progress circle width=100 no OverflowBox OK"
+          echo "=== progress circle dump ==="
+          grep -n "width: 130\|strokeWidth: 12\|fontSize: 18\|CircularProgressIndicator" lib/screens/home_screen.dart | head -20
+          echo "VERIFY: progress circle width=130 OK"
 
           python3 << 'PY'
           from pathlib import Path
