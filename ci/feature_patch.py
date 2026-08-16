@@ -142,11 +142,11 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home progress circle — MUST be clearly larger so % is readable on device.
-# Direct SizedBox size (no OverflowBox). 130px ~1.85x original 70.
-TARGET_W = 130
-TARGET_STROKE = 12
-TARGET_FONT = 18
+# 4) Today-progress CIRCLE — exact block replace from ZIP.
+# Bigger outer size (150) + thinner stroke (8) so % text has clear room inside and does not overlap the ring.
+TARGET_W = 150
+TARGET_STROKE = 8
+TARGET_FONT = 16
 
 home = lib / "screens/home_screen.dart"
 if not home.exists():
@@ -154,20 +154,120 @@ if not home.exists():
 
 ht = home.read_text(encoding="utf-8")
 
-# Drop failed OverflowBox experiments
-if "OverflowBox" in ht:
-    ht = re.sub(
-        r"SizedBox\(\s*width:\s*\d+\s*,\s*height:\s*\d+\s*,\s*child:\s*OverflowBox\([\s\S]*?"
-        r"child:\s*SizedBox\(\s*width:\s*\d+\s*,\s*height:\s*\d+\s*,\s*child:\s*Stack\(",
-        f"SizedBox(\n                    width: {TARGET_W},\n                    height: {TARGET_W},\n                    child: Stack(",
-        ht,
-        count=1,
-    )
-    ht = ht.replace("\n          clipBehavior: Clip.none,", "", 1)
-    # remove extra closing parens from OverflowBox/SizedBox if left over — handled below by full block replace
-    print("home: stripped OverflowBox wrapper")
+# Exact original ZIP block (the only reliable match)
+OLD = (
+    "                  SizedBox(\n"
+    "                    width: 70,\n"
+    "                    height: 70,\n"
+    "                    child: Stack(\n"
+    "                      alignment: Alignment.center,\n"
+    "                      children: [\n"
+    "                        CircularProgressIndicator(\n"
+    "                          value: progress,\n"
+    "                          strokeWidth: 6,\n"
+    "                          backgroundColor: accent.withOpacity(0.15),\n"
+    "                          valueColor: AlwaysStoppedAnimation(accent),\n"
+    "                        ),\n"
+    "                        Text(\n"
+    "                          '${(progress * 100).round()}%',\n"
+    "                          style: TextStyle(\n"
+    "                              fontWeight: FontWeight.w900,\n"
+    "                              fontSize: 14,\n"
+    "                              color: accent),\n"
+    "                        ),\n"
+    "                      ],\n"
+    "                    ),\n"
+    "                  ),"
+)
 
-# Progress card padding 16→10 to keep overall card from exploding
+NEW = (
+    f"                  SizedBox(\n"
+    f"                    width: {TARGET_W},\n"
+    f"                    height: {TARGET_W},\n"
+    f"                    child: Stack(\n"
+    f"                      alignment: Alignment.center,\n"
+    f"                      children: [\n"
+    f"                        CircularProgressIndicator(\n"
+    f"                          value: progress,\n"
+    f"                          strokeWidth: {TARGET_STROKE},\n"
+    f"                          backgroundColor: accent.withOpacity(0.15),\n"
+    f"                          valueColor: AlwaysStoppedAnimation(accent),\n"
+    f"                        ),\n"
+    f"                        Text(\n"
+    f"                          '${{(progress * 100).round()}}%',\n"
+    f"                          style: TextStyle(\n"
+    f"                              fontWeight: FontWeight.w900,\n"
+    f"                              fontSize: {TARGET_FONT},\n"
+    f"                              color: accent),\n"
+    f"                        ),\n"
+    f"                      ],\n"
+    f"                    ),\n"
+    f"                  ),"
+)
+
+# Also match prior partial patches (100/130 + various fonts/strokes)
+def block(w, stroke, font):
+    return (
+        f"                  SizedBox(\n"
+        f"                    width: {w},\n"
+        f"                    height: {w},\n"
+        f"                    child: Stack(\n"
+        f"                      alignment: Alignment.center,\n"
+        f"                      children: [\n"
+        f"                        CircularProgressIndicator(\n"
+        f"                          value: progress,\n"
+        f"                          strokeWidth: {stroke},\n"
+        f"                          backgroundColor: accent.withOpacity(0.15),\n"
+        f"                          valueColor: AlwaysStoppedAnimation(accent),\n"
+        f"                        ),\n"
+        f"                        Text(\n"
+        f"                          '${{(progress * 100).round()}}%',\n"
+        f"                          style: TextStyle(\n"
+        f"                              fontWeight: FontWeight.w900,\n"
+        f"                              fontSize: {font},\n"
+        f"                              color: accent),\n"
+        f"                        ),\n"
+        f"                      ],\n"
+        f"                    ),\n"
+        f"                  ),"
+    )
+
+replaced = False
+for name, old in [
+    ("zip70", OLD),
+    ("100/10/14", block(100, 10, 14)),
+    ("100/10/18", block(100, 10, 18)),
+    ("130/12/18", block(130, 12, 18)),
+    ("130/12/14", block(130, 12, 14)),
+    ("130/10/18", block(130, 10, 18)),
+]:
+    if old in ht:
+        ht = ht.replace(old, NEW, 1)
+        print(f"home: replaced circle block ({name}) → {TARGET_W}px stroke {TARGET_STROKE} font {TARGET_FONT}")
+        replaced = True
+        break
+
+if not replaced:
+    # Last resort: force width/height/stroke/font via targeted regex on progress ring only
+    pat = re.compile(
+        r"(SizedBox\(\s*width:\s*)(\d+)(\s*,\s*height:\s*)(\d+)(\s*,\s*child:\s*Stack\(\s*"
+        r"alignment:\s*Alignment\.center\s*,\s*children:\s*\[\s*"
+        r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*)([\d.]+)",
+        re.M,
+    )
+    m = pat.search(ht)
+    if not m:
+        raise SystemExit("ERROR: progress circle SizedBox not found")
+    ht = pat.sub(rf"\g<1>{TARGET_W}\g<3>{TARGET_W}\g<5>{TARGET_STROKE}", ht, count=1)
+    idx = ht.find("${(progress * 100).round()}%")
+    if idx >= 0:
+        win = ht[idx:idx + 220]
+        win2 = re.sub(r"fontSize:\s*\d+", f"fontSize: {TARGET_FONT}", win, count=1)
+        ht = ht[:idx] + win2 + ht[idx + 220:]
+    print(f"home: regex forced circle → {TARGET_W}/{TARGET_STROKE}/{TARGET_FONT}")
+    replaced = True
+
+# Progress card padding slightly tighter
 old_card = (
     "            // Progress (من الصورة)\n"
     "            SectionCard(\n"
@@ -182,74 +282,29 @@ new_card = (
 )
 if old_card in ht:
     ht = ht.replace(old_card, new_card, 1)
-    print("home: progress SectionCard padding 16→10")
-else:
-    ht2 = re.sub(
-        r"(// Progress[\s\S]{0,80}?SectionCard\(\s*padding:\s*const EdgeInsets\.all\()(\d+)(\))",
-        r"\g<1>10\3",
-        ht,
-        count=1,
-    )
-    if ht2 != ht:
-        ht = ht2
-        print("home: progress SectionCard padding →10 (regex)")
-
-# Robust: any SizedBox wrapping CircularProgressIndicator(value: progress)
-pat = re.compile(
-    r"(SizedBox\(\s*width:\s*)(\d+)(\s*,\s*height:\s*)(\d+)(\s*,\s*child:\s*Stack\(\s*"
-    r"alignment:\s*Alignment\.center\s*,\s*children:\s*\[\s*"
-    r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*)([\d.]+)",
-    re.M,
-)
-m = pat.search(ht)
-if not m:
-    raise SystemExit(
-        "ERROR: progress CircularProgressIndicator + SizedBox pattern not found in home_screen.dart"
-    )
-
-old_w, old_s = m.group(2), m.group(6)
-ht = pat.sub(
-    rf"\g<1>{TARGET_W}\g<3>{TARGET_W}\g<5>{TARGET_STROKE}",
-    ht,
-    count=1,
-)
-print(f"home: circle {old_w}→{TARGET_W} stroke {old_s}→{TARGET_STROKE}")
-
-# Percent label next to this indicator only — make readable
-# Match the Text right after value: progress indicator
-ht2, nfont = re.subn(
-    r"(\$\{\(progress \* 100\)\.round\(\)\}%[\s\S]{0,120}?fontSize:\s*)(\d+)",
-    rf"\g<1>{TARGET_FONT}",
-    ht,
-    count=1,
-)
-if nfont:
-    ht = ht2
-    print(f"home: percent fontSize → {TARGET_FONT}")
-else:
-    # fallback exact
-    for old_fs in ("fontSize: 14,", "fontSize: 16,", "fontSize: 20,"):
-        # only replace near progress percent
-        idx = ht.find("${(progress * 100).round()}%")
-        if idx < 0:
-            break
-        window = ht[idx:idx + 220]
-        if old_fs in window:
-            ht = ht[:idx] + window.replace(old_fs, f"fontSize: {TARGET_FONT},", 1) + ht[idx + 220:]
-            print(f"home: percent fontSize {old_fs} → {TARGET_FONT}")
-            break
+    print("home: progress card padding 16→10")
 
 home.write_text(ht, encoding="utf-8")
 final = home.read_text(encoding="utf-8")
-if f"width: {TARGET_W}" not in final:
-    raise SystemExit(f"ERROR: width {TARGET_W} not in final home_screen")
-if "OverflowBox" in final:
-    raise SystemExit("ERROR: OverflowBox still in home_screen")
-# dump snippet for Actions log
-idx = final.find("value: progress")
-print("--- circle snippet ---")
-print(final[max(0, idx - 180): idx + 220])
-print("--- end snippet ---")
-print(f"VERIFY OK: circle={TARGET_W} stroke={TARGET_STROKE} font={TARGET_FONT}")
 
+if f"width: {TARGET_W}" not in final or f"height: {TARGET_W}" not in final:
+    raise SystemExit(f"ERROR: circle size {TARGET_W} missing after patch")
+if f"strokeWidth: {TARGET_STROKE}" not in final:
+    raise SystemExit(f"ERROR: strokeWidth {TARGET_STROKE} missing")
+
+# Prove the CircularProgressIndicator(value: progress) sits in the 150 box
+i = final.find("CircularProgressIndicator(\n                          value: progress")
+if i < 0:
+    i = final.find("value: progress")
+snippet = final[max(0, i - 200): i + 280]
+print("--- FINAL CIRCLE SNIPPET ---")
+print(snippet)
+print("--- END ---")
+if f"width: {TARGET_W}" not in snippet and f"width: {TARGET_W}" not in final[max(0,i-250):i]:
+    # width should appear just above the indicator
+    head = final[max(0, i - 250): i]
+    if f"width: {TARGET_W}" not in head:
+        raise SystemExit("ERROR: width 150 not adjacent to progress CircularProgressIndicator")
+
+print(f"VERIFY OK: circle={TARGET_W} stroke={TARGET_STROKE} font={TARGET_FONT}")
 print("feature_patch done OK")
