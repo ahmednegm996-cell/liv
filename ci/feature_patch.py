@@ -143,31 +143,44 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home circle — robust size bump on the real progress ring
+# 4) home circle — ZIP today-progress ring (value: progress), not the stub
+TARGET_W = 130  # ~1.85x of original 70
+TARGET_STROKE = 10
 home = lib / "screens/home_screen.dart"
 if home.exists():
     ht = home.read_text(encoding="utf-8")
     pat = re.compile(
-        r"(SizedBox\(\n\s*width:\s*)(\d+)(,\n\s*height:\s*)(\d+)"
-        r"(,\n\s*child:\s*Stack\(\n\s*alignment:\s*Alignment\.center,\n\s*children:\s*\[\n\s*"
-        r"CircularProgressIndicator\(\n\s*value:\s*progress,\n\s*strokeWidth:\s*)([\d.]+)",
+        r"(SizedBox\(\s*width:\s*)(\d+)(\s*,\s*height:\s*)(\d+)(\s*,\s*child:\s*Stack\(\s*"
+        r"alignment:\s*Alignment\.center\s*,\s*children:\s*\[\s*"
+        r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*)([\d.]+)",
         re.M,
     )
     m = pat.search(ht)
-    if m:
-        ht2 = pat.sub(r"\g<1>96\g<3>96\g<5>7.5", ht, count=1)
-        if ht2 != ht:
-            home.write_text(ht2, encoding="utf-8")
-            print(f"home: circle {m.group(2)}→96 stroke {m.group(6)}→7.5")
-        else:
-            print("home: circle already 96")
-    else:
-        if "width: 70," in ht and "value: progress" in ht:
-            ht = ht.replace("width: 70,", "width: 96,", 1).replace("height: 70,", "height: 96,", 1)
-            ht = ht.replace("strokeWidth: 6,", "strokeWidth: 7.5,", 1)
-            home.write_text(ht, encoding="utf-8")
-            print("home: circle fallback 70→96")
-        else:
-            print("WARNING: home progress circle pattern not found")
+    if not m:
+        raise SystemExit(
+            "ERROR: today-progress circle not found (need value: progress + SizedBox width/height). "
+            "ZIP home_screen may have changed — update this pattern."
+        )
+    old_w, old_s = m.group(2), m.group(6)
+    ht2 = pat.sub(
+        rf"\g<1>{TARGET_W}\g<3>{TARGET_W}\g<5>{TARGET_STROKE}",
+        ht,
+        count=1,
+    )
+    # enlarge % label inside the ring
+    ht2 = ht2.replace(
+        "fontWeight: FontWeight.w900,\n                              fontSize: 14,",
+        "fontWeight: FontWeight.w900,\n                              fontSize: 20,",
+        1,
+    )
+    nfont = 1 if "fontSize: 20," in ht2 else 0
+    home.write_text(ht2, encoding="utf-8")
+    print(f"home: today-progress circle {old_w}→{TARGET_W} stroke {old_s}→{TARGET_STROKE} fontBump={nfont}")
+    final = home.read_text(encoding="utf-8")
+    if f"width: {TARGET_W}" not in final or "value: progress" not in final:
+        raise SystemExit(f"ERROR: circle verify failed (width {TARGET_W})")
+    print(f"VERIFY OK: progress circle width={TARGET_W}")
+else:
+    raise SystemExit("ERROR: lib/screens/home_screen.dart missing after ZIP restore")
 
 print("feature_patch done OK")
