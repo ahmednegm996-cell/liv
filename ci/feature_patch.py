@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Apply AI features that survive ZIP restore."""
+"""AI features that survive ZIP restore.
+
+Responsibilities only:
+- AI chat overlay
+- Gemini ADD_ tags + personalityInsight
+- l10n dreams wording
+
+Does NOT touch HomeScreen circle size, audio, or MainActivity.
+"""
 from pathlib import Path
 import runpy
 import shutil
@@ -17,7 +25,7 @@ if exp.exists():
 overlay = ROOT / "ci/overlays/lib"
 lib = ROOT / "lib"
 
-# 1) AI chat screen (action chips) — full overlay
+# 1) AI chat screen overlay
 rel = "screens/ai_chat_screen.dart"
 src = overlay / rel
 if src.exists() and src.stat().st_size > 500 and "addHabit" in src.read_text(encoding="utf-8"):
@@ -28,7 +36,7 @@ if src.exists() and src.stat().st_size > 500 and "addHabit" in src.read_text(enc
 else:
     print(f"WARNING: ai_chat overlay missing or incomplete — {src}")
 
-# 2) Gemini: keep ZIP full implementation.
+# 2) Gemini: ADD_ rules + personalityInsight
 gs = lib / "services/gemini_service.dart"
 if gs.exists():
     g = gs.read_text(encoding="utf-8")
@@ -142,21 +150,6 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home progress circle — REVERTED: keep original ZIP size (70 / stroke 6 / font 14).
-# No resize. User asked to undo last circle edits that changed other layout.
-home = lib / "screens/home_screen.dart"
-if home.exists():
-    ht = home.read_text(encoding="utf-8")
-    # Strip any OverflowBox / Clip.none experiments if present from older builds
-    if "OverflowBox" in ht:
-        ht = ht.replace("\n          clipBehavior: Clip.none,", "", 1)
-        print("home: removed leftover Clip.none")
-    if "value: progress" in ht and "width: 70" in ht:
-        print("home: progress circle left at original ZIP size (70)")
-    else:
-        print("home: progress circle present (no size force)")
-    home.write_text(ht, encoding="utf-8")
-else:
-    print("WARNING: home_screen.dart missing")
+# Home circle size is controlled only in HomeScreen source — never here.
 
 print("feature_patch done OK")
