@@ -3,6 +3,7 @@ package com.liv
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Build
+import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -15,6 +16,13 @@ class MainActivity : FlutterActivity() {
     private var soundPool: SoundPool? = null
     private var ageTickId: Int = 0
     private var buttonClickId: Int = 0
+    private val loadedIds = HashSet<Int>()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Preload ASAP so onboarding age picker has samples ready
+        initSounds()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -25,7 +33,7 @@ class MainActivity : FlutterActivity() {
                 val gain = (volArg?.toFloat() ?: 1.0f).coerceIn(0f, 1f)
                 when (call.method) {
                     "tick" -> {
-                        play(ageTickId, gain)
+                        play(ageTickId, gain * 0.9f)
                         if (gain > 0.01f) vibrate(14)
                         result.success(null)
                     }
@@ -46,6 +54,11 @@ class MainActivity : FlutterActivity() {
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         val pool = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()
+        pool.setOnLoadCompleteListener { _, sampleId, status ->
+            if (status == 0 && sampleId != 0) {
+                loadedIds.add(sampleId)
+            }
+        }
         soundPool = pool
         try {
             ageTickId = pool.load(this, R.raw.liv_picker_tick, 1)
@@ -60,6 +73,7 @@ class MainActivity : FlutterActivity() {
     private fun play(soundId: Int, volume: Float) {
         val pool = soundPool ?: return
         if (soundId == 0 || volume <= 0.001f) return
+        // Always attempt play; SoundPool no-ops if sample not ready yet
         pool.play(soundId, volume, volume, 1, 0, 1.0f)
     }
 
@@ -85,8 +99,10 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        soundPool?.setOnLoadCompleteListener(null)
         soundPool?.release()
         soundPool = null
+        loadedIds.clear()
         super.onDestroy()
     }
 }
