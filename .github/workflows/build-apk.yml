@@ -93,19 +93,14 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
-          # Hard verify: progress circle 150px thin stroke
+          # Verify: original circle (70) restored — no forced resize
           if ! grep -q "value: progress" lib/screens/home_screen.dart; then
             echo "ERROR: home_screen missing value: progress" && exit 1
           fi
-          if ! grep -q "width: 150" lib/screens/home_screen.dart; then
-            echo "ERROR: progress circle width 150 missing" && exit 1
+          if grep -q "OverflowBox" lib/screens/home_screen.dart; then
+            echo "ERROR: OverflowBox leftover" && exit 1
           fi
-          if ! grep -q "strokeWidth: 8" lib/screens/home_screen.dart; then
-            echo "ERROR: strokeWidth 8 missing" && exit 1
-          fi
-          echo "=== progress circle dump ==="
-          grep -n "width: 150\|height: 150\|strokeWidth: 8\|fontSize: 16\|CircularProgressIndicator" lib/screens/home_screen.dart | head -25
-          echo "VERIFY: progress circle width=150 stroke=8 OK"
+          echo "VERIFY: home progress circle present (original size)"
 
           python3 << 'PY'
           from pathlib import Path
