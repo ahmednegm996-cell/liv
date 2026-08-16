@@ -31,7 +31,6 @@ jobs:
         run: |
           set -e
 
-          # --- Preserve repo Source-of-Truth files BEFORE ZIP wipes lib/ ---
           mkdir -p /tmp/liv_sot /tmp/liv_audio_preserve
           if [ -f lib/services/audio_service.dart ]; then
             cp lib/services/audio_service.dart /tmp/liv_sot/audio_service.dart
@@ -50,7 +49,6 @@ jobs:
             cp assets/audio/meditation_ambient.mp3 /tmp/liv_audio_preserve/meditation_ambient.mp3
           fi
 
-          # --- Extract full UI from ZIP (temporary SoT for screens/layout) ---
           curl -fsSL -o /tmp/liv_app_full.zip \
             "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
           rm -rf /tmp/liv_extract && mkdir -p /tmp/liv_extract
@@ -62,7 +60,6 @@ jobs:
             echo "ERROR: zip missing lib/" && exit 1
           fi
 
-          # --- Overlays (AI chat, etc.) over ZIP lib ---
           if [ -f ci/expand_ai_overlay.py ]; then
             python3 ci/expand_ai_overlay.py
           fi
@@ -71,7 +68,6 @@ jobs:
             echo "Applied ci/overlays over ZIP lib"
           fi
 
-          # --- Lock REAL HomeScreen from ZIP (do NOT replace with repo home) ---
           if [ ! -f lib/screens/home_screen.dart ]; then
             echo "ERROR: home_screen.dart missing after ZIP" && exit 1
           fi
@@ -79,7 +75,6 @@ jobs:
           echo "LOCKED HOME (from ZIP):"
           sha256sum lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart
 
-          # Circle baseline from ZIP is 70x70. Fail if corrupted before our patch.
           python3 << 'PY'
           from pathlib import Path
           import re
@@ -99,7 +94,6 @@ jobs:
           print(f"HOME CIRCLE OK from ZIP: {w}x{ht} stroke={stroke}")
           PY
 
-          # --- AudioService = repository SoT (overwrite ZIP copy) ---
           mkdir -p lib/services
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
           echo "RESTORED AudioService from repo:"
@@ -107,17 +101,48 @@ jobs:
           grep -q "meditationVolume = 1.0" lib/services/audio_service.dart
           grep -q "MethodChannel('liv.feedback')" lib/services/audio_service.dart
 
-          # --- Onboarding (existing commit with audio wiring path) ---
           mkdir -p lib/screens
           curl -fsSL -o lib/screens/onboarding_screen.dart \
             "https://raw.githubusercontent.com/ahmednegm996-cell/liv/6116049ae02a1931ff7bea0d9f3930f0d9b039fb/lib/screens/onboarding_screen.dart"
 
-          # --- Optional period/UX patches (must not touch home circle) ---
+          # Single feedback path for age + sleep pickers: AudioService.tick only
+          # (no SystemSound + HapticFeedback + native vib triple hit)
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+          p = Path("lib/screens/onboarding_screen.dart")
+          t = p.read_text(encoding="utf-8")
+          if "audio_service.dart" not in t:
+              t = "import '../services/audio_service.dart';\n" + t
+          # Replace any _tick body with pure AudioService.tick()
+          new_tick = (
+              "  Future<void> _tick() async {\n"
+              "    await AudioService.instance.tick();\n"
+              "  }"
+          )
+          t2, n = re.subn(
+              r"Future<void>\s+_tick\s*\(\s*\)\s*async\s*\{[\s\S]*?\n  \}",
+              new_tick,
+              t,
+              count=1,
+          )
+          if n == 0:
+              t2, n = re.subn(
+                  r"Future<void>\s+_tick\s*\(\s*\)\s*=>\s*AudioService\.instance\.tick\s*\(\s*\)\s*;",
+                  "Future<void> _tick() async {\n    await AudioService.instance.tick();\n  }",
+                  t,
+                  count=1,
+              )
+          if n == 0:
+              raise SystemExit("ERROR: could not normalize onboarding _tick()")
+          p.write_text(t2, encoding="utf-8")
+          print("onboarding _tick → AudioService.instance.tick() only")
+          PY
+
           if [ -f ci/ux_period_patch.py ]; then python3 ci/ux_period_patch.py; fi
           if [ -f ci/period_nav_patch.py ]; then python3 ci/period_nav_patch.py; fi
           if [ -f ci/feedback_patch.py ]; then python3 ci/feedback_patch.py || echo "WARNING: feedback_patch non-fatal"; fi
 
-          # --- Native feedback: WAVs + MainActivity (sound_fix is SoT writer) ---
           if [ -f ci/sound_fix.py ]; then
             python3 ci/sound_fix.py
             echo "Applied sound_fix"
@@ -128,7 +153,6 @@ jobs:
             if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
           fi
 
-          # --- Assets ---
           if [ -d /tmp/liv_extract/assets ]; then
             mkdir -p assets && cp -a /tmp/liv_extract/assets/. assets/
           fi
@@ -148,26 +172,22 @@ jobs:
             cp /tmp/liv_extract/pubspec.yaml pubspec.yaml
           fi
 
-          # --- Soundtrack + feature (AI only). Must NOT resize home circle. ---
           python3 ci/soundtrack_patch.py
 
-          # --- Re-lock HomeScreen: if any patch mutated it, restore ZIP original ---
           if ! cmp -s lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart; then
             echo "WARNING: home_screen.dart changed after patches — restoring ZIP original"
             cp /tmp/liv_sot/home_from_zip.dart lib/screens/home_screen.dart
           fi
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
 
-          # --- Home progress circle: ONLY size controller (after re-lock, never undone) ---
           if [ -f ci/home_circle_patch.py ]; then
             python3 ci/home_circle_patch.py
           else
             echo "ERROR: ci/home_circle_patch.py missing" && exit 1
           fi
 
-          # ========== FINAL VALIDATION ==========
           echo "======== FINAL SOURCE HASHES ========"
-          echo "FINAL HOME SOURCE:"
+          echo "FINAL HOME SOURCE: lib/screens/home_screen.dart (ZIP + home_circle_patch)"
           sha256sum lib/screens/home_screen.dart
           echo "FINAL AUDIO SERVICE:"
           sha256sum lib/services/audio_service.dart
@@ -192,7 +212,20 @@ jobs:
           if m.group(1) != "90" or m.group(2) != "90":
               raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 90x90")
           print(f"VALIDATE home circle: {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
+          # Print the actual source lines used for the ring
+          for line in h.splitlines():
+              if re.search(r"width:\s*90|height:\s*90|strokeWidth:\s*7|fontSize:\s*16", line):
+                  if "progress" in h[max(0, h.find(line)-200):h.find(line)+200] or True:
+                      print("FINAL CIRCLE LINE:", line.strip())
           PY
+
+          # Onboarding age/sleep must use AudioService.tick only
+          if ! grep -q "AudioService.instance.tick()" lib/screens/onboarding_screen.dart; then
+            echo "ERROR: onboarding missing AudioService.instance.tick()" && exit 1
+          fi
+          if grep -A6 "Future<void> _tick" lib/screens/onboarding_screen.dart | grep -q "HapticFeedback"; then
+            echo "ERROR: onboarding _tick still has HapticFeedback (double vib)" && exit 1
+          fi
 
           if ! grep -q "meditationVolume = 1.0" lib/services/audio_service.dart; then
             echo "ERROR: AudioService meditationVolume missing" && exit 1
@@ -207,6 +240,12 @@ jobs:
           if ! grep -q "liv.feedback" android/app/src/main/kotlin/com/liv/MainActivity.kt; then
             echo "ERROR: MainActivity missing liv.feedback" && exit 1
           fi
+          if ! grep -q '"tick"' android/app/src/main/kotlin/com/liv/MainActivity.kt; then
+            echo "ERROR: MainActivity missing tick handler" && exit 1
+          fi
+          if ! grep -q "onCreate" android/app/src/main/kotlin/com/liv/MainActivity.kt; then
+            echo "ERROR: MainActivity missing onCreate preload" && exit 1
+          fi
 
           test -s android/app/src/main/res/raw/liv_picker_tick.wav
           test -s android/app/src/main/res/raw/liv_button_click.wav
@@ -214,9 +253,6 @@ jobs:
 
           if grep -R "replace.*tick().*buttonClick" ci/*.py 2>/dev/null; then
             echo "ERROR: patch still converts tick→buttonClick" && exit 1
-          fi
-          if grep -n "tick()" ci/soundtrack_patch.py | grep -i replace; then
-            echo "ERROR: soundtrack_patch still rewrites tick" && exit 1
           fi
 
           if grep -E "OverflowBox|width: 15[0-9]|width: 13[0-9]|width: 12[0-9]" ci/feature_patch.py ci/soundtrack_patch.py 2>/dev/null; then
@@ -254,7 +290,7 @@ jobs:
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart
           grep -q "_pendingAction" lib/screens/ai_chat_screen.dart || grep -q "addHabit" lib/screens/ai_chat_screen.dart
-          echo "VERIFY Path B OK — ZIP home + circle 90, repo audio, native feedback"
+          echo "VERIFY Path B OK — ZIP home + circle 90, age/sleep tick via AudioService, native feedback"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
