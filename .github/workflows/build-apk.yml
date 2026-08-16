@@ -97,33 +97,21 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
-          # Hard verify: larger ring visible (OverflowBox + ListView Clip.none); layout 70
+          # Hard verify: real 100px circle (OverflowBox abandoned — was invisible on device)
           if ! grep -q "value: progress" lib/screens/home_screen.dart; then
-            echo "ERROR: home_screen missing value: progress (wrong file after ZIP?)" && exit 1
+            echo "ERROR: home_screen missing value: progress" && exit 1
           fi
-          if ! grep -q "OverflowBox" lib/screens/home_screen.dart; then
-            echo "ERROR: progress circle OverflowBox missing — feature_patch did not apply" && exit 1
+          if grep -q "OverflowBox" lib/screens/home_screen.dart; then
+            echo "ERROR: OverflowBox still present" && exit 1
           fi
-          if ! grep -q "width: 124" lib/screens/home_screen.dart; then
-            echo "ERROR: visual circle width 124 missing" && exit 1
+          if ! grep -q "width: 100" lib/screens/home_screen.dart; then
+            echo "ERROR: progress circle width 100 missing" && exit 1
           fi
-          if ! grep -q "clipBehavior: Clip.none" lib/screens/home_screen.dart; then
-            echo "ERROR: ListView Clip.none missing — OverflowBox would be clipped" && exit 1
+          MA=$(find android -name MainActivity.kt 2>/dev/null | head -1)
+          if [ -n "$MA" ] && ! grep -q "USAGE_MEDIA" "$MA"; then
+            echo "ERROR: MainActivity not USAGE_MEDIA" && exit 1
           fi
-          if ! grep -q "width: 70" lib/screens/home_screen.dart; then
-            echo "ERROR: layout slot width 70 missing — card may be enlarged" && exit 1
-          fi
-          # Final audio path: SoundPool must use MEDIA (not sonification-only stream)
-          if [ -f android/app/src/main/kotlin/com/liv/MainActivity.kt ] || ls android/app/src/main/kotlin/**/MainActivity.kt >/dev/null 2>&1; then
-            MA=$(find android -name MainActivity.kt | head -1)
-            if [ -n "$MA" ]; then
-              if ! grep -q "USAGE_MEDIA" "$MA"; then
-                echo "ERROR: MainActivity not on USAGE_MEDIA — click would ignore media volume" && exit 1
-              fi
-              echo "VERIFY: MainActivity USAGE_MEDIA OK ($MA)"
-            fi
-          fi
-          echo "VERIFY: progress circle layout=70 visual=124 Clip.none OK"
+          echo "VERIFY: progress circle width=100 no OverflowBox OK"
 
           python3 << 'PY'
           from pathlib import Path
