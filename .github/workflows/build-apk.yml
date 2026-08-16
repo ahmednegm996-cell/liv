@@ -79,14 +79,13 @@ jobs:
           echo "LOCKED HOME (from ZIP):"
           sha256sum lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart
 
-          # Circle must already be original ZIP size (~70). Fail if not.
+          # Circle baseline from ZIP is 70x70. Fail if corrupted before our patch.
           python3 << 'PY'
           from pathlib import Path
           import re
           h = Path("lib/screens/home_screen.dart").read_text(encoding="utf-8")
           if "OverflowBox" in h:
               raise SystemExit("ERROR: ZIP home already has OverflowBox — unexpected")
-          # Progress ring only: SizedBox wrapping CircularProgressIndicator(value: progress)
           m = re.search(
               r"SizedBox\(\s*width:\s*(\d+)\s*,\s*height:\s*(\d+)\s*,\s*child:\s*Stack\([\s\S]{0,250}?"
               r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*([\d.]+)",
@@ -123,11 +122,9 @@ jobs:
             python3 ci/sound_fix.py
             echo "Applied sound_fix"
           fi
-          # Ensure final MainActivity matches repo intent (USAGE_MEDIA + channel)
           if [ -f /tmp/liv_sot/MainActivity.kt ]; then
             mkdir -p android/app/src/main/kotlin/com/liv
             cp /tmp/liv_sot/MainActivity.kt android/app/src/main/kotlin/com/liv/MainActivity.kt
-            # Re-run sound_fix so res/raw WAVs exist and MainActivity stays consistent
             if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
           fi
 
@@ -159,8 +156,14 @@ jobs:
             echo "WARNING: home_screen.dart changed after patches — restoring ZIP original"
             cp /tmp/liv_sot/home_from_zip.dart lib/screens/home_screen.dart
           fi
-          # Re-apply repo AudioService in case a patch overwrote it
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
+
+          # --- Home progress circle: ONLY size controller (after re-lock, never undone) ---
+          if [ -f ci/home_circle_patch.py ]; then
+            python3 ci/home_circle_patch.py
+          else
+            echo "ERROR: ci/home_circle_patch.py missing" && exit 1
+          fi
 
           # ========== FINAL VALIDATION ==========
           echo "======== FINAL SOURCE HASHES ========"
@@ -172,7 +175,6 @@ jobs:
           sha256sum android/app/src/main/kotlin/com/liv/MainActivity.kt
           echo "===================================="
 
-          # Home: ZIP original, no OverflowBox, progress circle 70x70
           if grep -q "OverflowBox" lib/screens/home_screen.dart; then
             echo "ERROR: OverflowBox in final home_screen" && exit 1
           fi
@@ -187,20 +189,11 @@ jobs:
           )
           if not m:
               raise SystemExit("ERROR: final progress circle not found")
-          if m.group(1) != "70" or m.group(2) != "70":
-              raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 70x70")
-          # Forbidden forced sizes left over from old experiments
-          for bad in ("width: 100", "width: 124", "width: 130", "width: 150", "width: 220"):
-              # only fail if adjacent to progress indicator context
-              pass
-          if "addPostFrameCallback" in h and "Widget build(" in h:
-              build = h[h.find("Widget build("):]
-              # crude: if callback appears before next top-level method after build start inside build body is hard; skip hard fail
-              pass
+          if m.group(1) != "90" or m.group(2) != "90":
+              raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 90x90")
           print(f"VALIDATE home circle: {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
           PY
 
-          # AudioService from repo
           if ! grep -q "meditationVolume = 1.0" lib/services/audio_service.dart; then
             echo "ERROR: AudioService meditationVolume missing" && exit 1
           fi
@@ -208,7 +201,6 @@ jobs:
             echo "ERROR: AudioService missing liv.feedback channel" && exit 1
           fi
 
-          # MainActivity
           if ! grep -q "USAGE_MEDIA" android/app/src/main/kotlin/com/liv/MainActivity.kt; then
             echo "ERROR: MainActivity missing USAGE_MEDIA" && exit 1
           fi
@@ -216,14 +208,10 @@ jobs:
             echo "ERROR: MainActivity missing liv.feedback" && exit 1
           fi
 
-          # WAVs
           test -s android/app/src/main/res/raw/liv_picker_tick.wav
           test -s android/app/src/main/res/raw/liv_button_click.wav
-
-          # Meditation asset
           test -s assets/audio/meditation_ambient.mp3
 
-          # Patches must not globally rewrite tick→buttonClick (scan scripts)
           if grep -R "replace.*tick().*buttonClick" ci/*.py 2>/dev/null; then
             echo "ERROR: patch still converts tick→buttonClick" && exit 1
           fi
@@ -231,7 +219,6 @@ jobs:
             echo "ERROR: soundtrack_patch still rewrites tick" && exit 1
           fi
 
-          # feature/soundtrack must not mention circle resize targets
           if grep -E "OverflowBox|width: 15[0-9]|width: 13[0-9]|width: 12[0-9]" ci/feature_patch.py ci/soundtrack_patch.py 2>/dev/null; then
             echo "ERROR: circle resize still in feature/soundtrack patch" && exit 1
           fi
@@ -251,7 +238,6 @@ jobs:
               asset_entries.append("assets/icon/liv_icon.png")
           if not asset_entries:
               raise SystemExit("ERROR: no assets")
-          # exactly one meditation entry
           assets_block = "  assets:\n" + "".join(f"    - {a}\n" for a in asset_entries)
           if re.search(r"(?m)^  assets:\n(?:    - .+\n)*", t):
               t = re.sub(r"(?m)^  assets:\n(?:    - .+\n)*", assets_block, t, count=1)
@@ -268,7 +254,7 @@ jobs:
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart
           grep -q "_pendingAction" lib/screens/ai_chat_screen.dart || grep -q "addHabit" lib/screens/ai_chat_screen.dart
-          echo "VERIFY Path B OK — ZIP home locked, repo audio, native feedback"
+          echo "VERIFY Path B OK — ZIP home + circle 90, repo audio, native feedback"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
