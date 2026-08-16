@@ -143,7 +143,7 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home circle — ZIP today-progress ring (value: progress), not the stub
+# 4) home circle — enlarge ring only (SizedBox + stroke). NEVER change % text size.
 TARGET_W = 130  # ~1.85x of original 70
 TARGET_STROKE = 10
 home = lib / "screens/home_screen.dart"
@@ -167,18 +167,15 @@ if home.exists():
         ht,
         count=1,
     )
-    # enlarge % label inside the ring
-    ht2 = ht2.replace(
-        "fontWeight: FontWeight.w900,\n                              fontSize: 14,",
-        "fontWeight: FontWeight.w900,\n                              fontSize: 20,",
-        1,
-    )
-    nfont = 1 if "fontSize: 20," in ht2 else 0
+    # DO NOT change % text size — only the ring (SizedBox + stroke)
     home.write_text(ht2, encoding="utf-8")
-    print(f"home: today-progress circle {old_w}→{TARGET_W} stroke {old_s}→{TARGET_STROKE} fontBump={nfont}")
+    print(f"home: today-progress circle {old_w}→{TARGET_W} stroke {old_s}→{TARGET_STROKE} (text size unchanged)")
     final = home.read_text(encoding="utf-8")
     if f"width: {TARGET_W}" not in final or "value: progress" not in final:
         raise SystemExit(f"ERROR: circle verify failed (width {TARGET_W})")
+    if "fontSize: 20," in final and "fontSize: 14," not in final:
+        # soft warning only if someone re-added font bump elsewhere
+        print("NOTE: no fontSize:14 left near progress; ensure % label not enlarged")
     print(f"VERIFY OK: progress circle width={TARGET_W}")
 else:
     raise SystemExit("ERROR: lib/screens/home_screen.dart missing after ZIP restore")
