@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Generate soft premium UI click/tick WAVs and wire MainActivity on MEDIA stream."""
+"""Generate soft premium UI click/tick WAVs.
+UI feedback uses ASSISTANCE_SONIFICATION so it is independent of media volume.
+"""
 from pathlib import Path
 import math
 import struct
@@ -11,7 +13,6 @@ raw_dir.mkdir(parents=True, exist_ok=True)
 SR = 44100
 
 def write_wav(path: Path, duration: float, freqs_amps, decay: float, peak: float):
-    """Very short mono PCM16 soft tap — no harsh edges, no sub-bass."""
     n = max(16, int(SR * duration))
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
@@ -20,28 +21,28 @@ def write_wav(path: Path, duration: float, freqs_amps, decay: float, peak: float
         frames = bytearray()
         for i in range(n):
             t = i / SR
-            attack = 0.5 - 0.5 * math.cos(math.pi * min(1.0, t / 0.002))
+            attack = 0.5 - 0.5 * math.cos(math.pi * min(1.0, t / 0.0018))
             env = attack * math.exp(-t * decay)
-            tone = 0.0
-            for f, a in freqs_amps:
-                tone += a * math.sin(2.0 * math.pi * f * t)
+            tone = sum(a * math.sin(2.0 * math.pi * f * t) for f, a in freqs_amps)
             s = math.tanh(tone * env * peak)
-            frames.extend(struct.pack("<h", int(s * 26000)))
+            frames.extend(struct.pack("<h", int(s * 30000)))
         w.writeframes(frames)
 
+# Picker: slightly deeper soft tick
 write_wav(
     raw_dir / "liv_picker_tick.wav",
-    0.022,
-    [(250, 0.50), (375, 0.22), (500, 0.08)],
-    decay=170,
-    peak=0.40,
+    0.026,
+    [(240, 0.55), (360, 0.28), (480, 0.10)],
+    decay=155,
+    peak=0.62,
 )
+# Button: soft premium mid click — clear but not harsh
 write_wav(
     raw_dir / "liv_button_click.wav",
-    0.016,
-    [(700, 0.40), (1050, 0.15), (520, 0.12)],
-    decay=200,
-    peak=0.34,
+    0.018,
+    [(760, 0.50), (1140, 0.20), (560, 0.16)],
+    decay=185,
+    peak=0.58,
 )
 print("[sound_fix] WAVs written")
 
@@ -70,13 +71,13 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "tick" -> {
-                        play(ageTickId, 0.38f)
-                        vibrate(12)
+                        play(ageTickId, 0.85f)
+                        vibrate(14)
                         result.success(null)
                     }
                     "buttonClick" -> {
-                        play(buttonClickId, 0.32f)
-                        vibrate(8)
+                        play(buttonClickId, 0.78f)
+                        vibrate(10)
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -86,8 +87,9 @@ class MainActivity : FlutterActivity() {
 
     private fun initSounds() {
         if (soundPool != null) return
+        // Sonification stream: independent from media/music volume slider
         val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         val pool = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()
