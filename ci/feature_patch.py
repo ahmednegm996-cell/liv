@@ -143,41 +143,92 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home circle — enlarge ring only (SizedBox + stroke). NEVER change % text size.
-TARGET_W = 130  # ~1.85x of original 70
-TARGET_STROKE = 10
+# 4) home circle — visual ring larger via OverflowBox; layout slot stays 70 so card does not grow.
+# Never change % fontSize. Never enlarge the parent card.
 home = lib / "screens/home_screen.dart"
-if home.exists():
-    ht = home.read_text(encoding="utf-8")
-    pat = re.compile(
-        r"(SizedBox\(\s*width:\s*)(\d+)(\s*,\s*height:\s*)(\d+)(\s*,\s*child:\s*Stack\(\s*"
-        r"alignment:\s*Alignment\.center\s*,\s*children:\s*\[\s*"
-        r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*)([\d.]+)",
-        re.M,
-    )
-    m = pat.search(ht)
-    if not m:
-        raise SystemExit(
-            "ERROR: today-progress circle not found (need value: progress + SizedBox width/height). "
-            "ZIP home_screen may have changed — update this pattern."
-        )
-    old_w, old_s = m.group(2), m.group(6)
-    ht2 = pat.sub(
-        rf"\g<1>{TARGET_W}\g<3>{TARGET_W}\g<5>{TARGET_STROKE}",
-        ht,
-        count=1,
-    )
-    # DO NOT change % text size — only the ring (SizedBox + stroke)
-    home.write_text(ht2, encoding="utf-8")
-    print(f"home: today-progress circle {old_w}→{TARGET_W} stroke {old_s}→{TARGET_STROKE} (text size unchanged)")
-    final = home.read_text(encoding="utf-8")
-    if f"width: {TARGET_W}" not in final or "value: progress" not in final:
-        raise SystemExit(f"ERROR: circle verify failed (width {TARGET_W})")
-    if "fontSize: 20," in final and "fontSize: 14," not in final:
-        # soft warning only if someone re-added font bump elsewhere
-        print("NOTE: no fontSize:14 left near progress; ensure % label not enlarged")
-    print(f"VERIFY OK: progress circle width={TARGET_W}")
-else:
+if not home.exists():
     raise SystemExit("ERROR: lib/screens/home_screen.dart missing after ZIP restore")
+
+ht = home.read_text(encoding="utf-8")
+
+OLD = """                  SizedBox(
+                    width: 70,
+                    height: 70,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 6,
+                          backgroundColor: accent.withOpacity(0.15),
+                          valueColor: AlwaysStoppedAnimation(accent),
+                        ),
+                        Text(
+                          '${(progress * 100).round()}%',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                              color: accent),
+                        ),
+                      ],
+                    ),
+                  ),"""
+
+NEW = """                  SizedBox(
+                    width: 70,
+                    height: 70,
+                    child: OverflowBox(
+                      maxWidth: 118,
+                      maxHeight: 118,
+                      child: SizedBox(
+                        width: 118,
+                        height: 118,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircularProgressIndicator(
+                              value: progress,
+                              strokeWidth: 9,
+                              backgroundColor: accent.withOpacity(0.15),
+                              valueColor: AlwaysStoppedAnimation(accent),
+                            ),
+                            Text(
+                              '${(progress * 100).round()}%',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                  color: accent),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),"""
+
+# Also accept if a previous patch already set 130
+OLD_130 = OLD.replace("width: 70,", "width: 130,").replace("height: 70,", "height: 130,").replace("strokeWidth: 6,", "strokeWidth: 10,")
+
+if "OverflowBox" in ht and "width: 118" in ht and "fontSize: 14" in ht:
+    print("home: progress circle already OverflowBox 118 (text 14)")
+elif OLD in ht:
+    home.write_text(ht.replace(OLD, NEW, 1), encoding="utf-8")
+    print("home: progress ring OverflowBox 118, layout slot 70, fontSize 14")
+elif OLD_130 in ht:
+    home.write_text(ht.replace(OLD_130, NEW, 1), encoding="utf-8")
+    print("home: reverted 130 card growth → OverflowBox 118 in 70 slot")
+else:
+    if "value: progress" not in ht:
+        raise SystemExit("ERROR: today-progress circle not found")
+    raise SystemExit("ERROR: progress circle block did not match expected ZIP pattern")
+
+final = home.read_text(encoding="utf-8")
+if "OverflowBox" not in final or "width: 118" not in final:
+    raise SystemExit("ERROR: verify failed — OverflowBox 118 missing")
+if "fontSize: 20" in final and "fontSize: 14" not in final:
+    raise SystemExit("ERROR: % fontSize was enlarged")
+if "width: 70" not in final:
+    raise SystemExit("ERROR: layout slot width 70 missing — card may still be enlarged")
+print("VERIFY OK: layout=70 visual=118 text=14")
 
 print("feature_patch done OK")
