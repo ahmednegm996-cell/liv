@@ -143,36 +143,51 @@ if l10n.exists():
         l10n.write_text(t, encoding="utf-8")
         print(f"l10n: {n}")
 
-# 4) home circle — OverflowBox needs ListView clipBehavior: Clip.none or it is invisible.
-# Layout slot stays 70 (card size unchanged). Visual ring 124. % text stays fontSize 14.
+# 4) home progress ring — REAL layout size (OverflowBox was clipped/invisible on device).
+# Card padding for this SectionCard only 16→12 to offset height. % fontSize stays 14.
 home = lib / "screens/home_screen.dart"
 if not home.exists():
     raise SystemExit("ERROR: lib/screens/home_screen.dart missing after ZIP restore")
 
 ht = home.read_text(encoding="utf-8")
 
-# Critical: ListView clips overflow paint — without this OverflowBox is useless
-if "clipBehavior: Clip.none" not in ht:
-    if "child: ListView(" in ht:
-        ht = ht.replace("child: ListView(", "child: ListView(\n          clipBehavior: Clip.none,", 1)
-        print("home: ListView clipBehavior=Clip.none")
-    else:
-        raise SystemExit("ERROR: ListView not found in home_screen")
+# Remove prior OverflowBox / Clip.none experiments if present
+if "OverflowBox" in ht:
+    ht = ht.replace("\n          clipBehavior: Clip.none,", "", 1)
+    print("home: removed prior OverflowBox/Clip.none experiment")
 
-OLD = """                  SizedBox(
-                    width: 70,
-                    height: 70,
+old_card = """            // Progress (من الصورة)
+            SectionCard(
+              padding: const EdgeInsets.all(16),
+              child: Row("""
+new_card = """            // Progress (من الصورة)
+            SectionCard(
+              padding: const EdgeInsets.all(12),
+              child: Row("""
+if old_card in ht:
+    ht = ht.replace(old_card, new_card, 1)
+    print("home: progress SectionCard padding 16→12")
+elif "padding: const EdgeInsets.all(12)" in ht and "// Progress" in ht:
+    print("home: progress SectionCard padding already 12")
+else:
+    print("home: NOTE progress card padding pattern soft-skip")
+
+def circle_block(w, stroke):
+    return (
+        f"""                  SizedBox(
+                    width: {w},
+                    height: {w},
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
                         CircularProgressIndicator(
                           value: progress,
-                          strokeWidth: 6,
+                          strokeWidth: {stroke},
                           backgroundColor: accent.withOpacity(0.15),
                           valueColor: AlwaysStoppedAnimation(accent),
                         ),
                         Text(
-                          '${(progress * 100).round()}%',
+                          '${{(progress * 100).round()}}%',
                           style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 14,
@@ -181,8 +196,13 @@ OLD = """                  SizedBox(
                       ],
                     ),
                   ),"""
+    )
 
-NEW = """                  SizedBox(
+TARGET = 100
+TARGET_STROKE = 10
+NEW = circle_block(TARGET, TARGET_STROKE)
+
+OLD_OVERFLOW = """                  SizedBox(
                     width: 70,
                     height: 70,
                     child: OverflowBox(
@@ -215,63 +235,34 @@ NEW = """                  SizedBox(
                     ),
                   ),"""
 
-OLD_130 = OLD.replace("width: 70,", "width: 130,").replace("height: 70,", "height: 130,").replace("strokeWidth: 6,", "strokeWidth: 10,")
-OLD_118 = """                  SizedBox(
-                    width: 70,
-                    height: 70,
-                    child: OverflowBox(
-                      maxWidth: 118,
-                      maxHeight: 118,
-                      child: SizedBox(
-                        width: 118,
-                        height: 118,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            CircularProgressIndicator(
-                              value: progress,
-                              strokeWidth: 9,
-                              backgroundColor: accent.withOpacity(0.15),
-                              valueColor: AlwaysStoppedAnimation(accent),
-                            ),
-                            Text(
-                              '${(progress * 100).round()}%',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
-                                  color: accent),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),"""
+OLD_70 = circle_block(70, 6)
+OLD_130 = circle_block(130, 10)
 
-if "width: 124" in ht and "OverflowBox" in ht and "clipBehavior: Clip.none" in ht:
-    print("home: circle already 124 + Clip.none")
-elif OLD in ht:
-    ht = ht.replace(OLD, NEW, 1)
-    print("home: OverflowBox 124 + layout 70 + fontSize 14")
-elif OLD_118 in ht:
-    ht = ht.replace(OLD_118, NEW, 1)
-    print("home: upgraded OverflowBox 118→124")
-elif OLD_130 in ht:
-    ht = ht.replace(OLD_130, NEW, 1)
-    print("home: reverted card growth 130 → OverflowBox 124")
-elif "value: progress" not in ht:
-    raise SystemExit("ERROR: today-progress circle not found")
-else:
-    raise SystemExit("ERROR: progress circle block did not match expected pattern")
+replaced = False
+for name, old in [("overflow124", OLD_OVERFLOW), ("70", OLD_70), ("130", OLD_130)]:
+    if old in ht:
+        ht = ht.replace(old, NEW, 1)
+        print(f"home: circle {name} → {TARGET}px stroke {TARGET_STROKE}, fontSize 14")
+        replaced = True
+        break
+
+if not replaced:
+    if f"width: {TARGET}" in ht and "value: progress" in ht and "OverflowBox" not in ht:
+        print("home: circle already", TARGET)
+        replaced = True
+    else:
+        raise SystemExit("ERROR: progress circle block not found to resize")
 
 home.write_text(ht, encoding="utf-8")
 final = home.read_text(encoding="utf-8")
-if "OverflowBox" not in final or "width: 124" not in final:
-    raise SystemExit("ERROR: verify failed — OverflowBox 124 missing")
-if "clipBehavior: Clip.none" not in final:
-    raise SystemExit("ERROR: ListView Clip.none missing — circle would be clipped")
-if "width: 70" not in final:
-    raise SystemExit("ERROR: layout slot 70 missing")
-print("VERIFY OK: ListView Clip.none + layout=70 visual=124 text=14")
+if f"width: {TARGET}" not in final or "value: progress" not in final:
+    raise SystemExit(f"ERROR: verify failed width {TARGET}")
+if "OverflowBox" in final:
+    raise SystemExit("ERROR: OverflowBox still present — remove it")
+idx = final.find("${(progress * 100).round()}%")
+snippet = final[idx:idx + 200] if idx >= 0 else ""
+if "fontSize: 20" in snippet:
+    raise SystemExit("ERROR: percent fontSize enlarged")
+print(f"VERIFY OK: circle layout={TARGET} stroke={TARGET_STROKE} fontSize=14 no OverflowBox")
 
 print("feature_patch done OK")
