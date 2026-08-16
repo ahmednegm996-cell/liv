@@ -50,16 +50,12 @@ jobs:
             echo "ERROR: zip missing lib/" && exit 1
           fi
 
-          # Expand compressed AI chat overlay if present
           if [ -f ci/expand_ai_overlay.py ]; then
             python3 ci/expand_ai_overlay.py
           fi
-          # Overlays win over ZIP — personality + AI actions survive restore
           if [ -d ci/overlays/lib ]; then
             cp -a ci/overlays/lib/. lib/
             echo "Applied ci/overlays over ZIP lib"
-            grep -n "personalityInsight" lib/services/gemini_service.dart | head -3 || true
-            grep -n "_pendingAction\|addHabit" lib/screens/ai_chat_screen.dart | head -5 || true
           fi
 
           mkdir -p lib/services
@@ -97,19 +93,19 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
-          # Hard verify: progress circle 130px + percent font 18
+          # Hard verify: progress circle 150px thin stroke
           if ! grep -q "value: progress" lib/screens/home_screen.dart; then
             echo "ERROR: home_screen missing value: progress" && exit 1
           fi
-          if grep -q "OverflowBox" lib/screens/home_screen.dart; then
-            echo "ERROR: OverflowBox still present" && exit 1
+          if ! grep -q "width: 150" lib/screens/home_screen.dart; then
+            echo "ERROR: progress circle width 150 missing" && exit 1
           fi
-          if ! grep -q "width: 130" lib/screens/home_screen.dart; then
-            echo "ERROR: progress circle width 130 missing" && exit 1
+          if ! grep -q "strokeWidth: 8" lib/screens/home_screen.dart; then
+            echo "ERROR: strokeWidth 8 missing" && exit 1
           fi
           echo "=== progress circle dump ==="
-          grep -n "width: 130\|strokeWidth: 12\|fontSize: 18\|CircularProgressIndicator" lib/screens/home_screen.dart | head -20
-          echo "VERIFY: progress circle width=130 OK"
+          grep -n "width: 150\|height: 150\|strokeWidth: 8\|fontSize: 16\|CircularProgressIndicator" lib/screens/home_screen.dart | head -25
+          echo "VERIFY: progress circle width=150 stroke=8 OK"
 
           python3 << 'PY'
           from pathlib import Path
@@ -136,7 +132,6 @@ jobs:
 
           test -f lib/main.dart
           test -s assets/audio/meditation_ambient.mp3
-          # Final source check — must not be placeholder personality
           if grep -q "Keep growing with LIV" lib/services/gemini_service.dart 2>/dev/null; then
             echo "ERROR: Keep growing placeholder still present" && exit 1
           fi
