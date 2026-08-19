@@ -38,7 +38,7 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "buttonClick" -> {
-                        play(buttonClickId, gain * 0.85f)
+                        play(buttonClickId, gain * 1.0f)
                         if (gain > 0.01f) vibrate(10)
                         result.success(null)
                     }

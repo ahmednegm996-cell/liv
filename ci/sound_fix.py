@@ -47,7 +47,7 @@ write_wav(
     0.018,
     [(760, 0.50), (1140, 0.20), (560, 0.16)],
     decay=185,
-    peak=0.58,
+    peak=0.72,
 )
 print("[sound_fix] WAVs written")
 
@@ -73,6 +73,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Preload ASAP so onboarding age picker has samples ready
         initSounds()
     }
 
@@ -90,7 +91,7 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "buttonClick" -> {
-                        play(buttonClickId, gain * 0.85f)
+                        play(buttonClickId, gain * 1.0f)
                         if (gain > 0.01f) vibrate(10)
                         result.success(null)
                     }
@@ -125,6 +126,7 @@ class MainActivity : FlutterActivity() {
     private fun play(soundId: Int, volume: Float) {
         val pool = soundPool ?: return
         if (soundId == 0 || volume <= 0.001f) return
+        // Always attempt play; SoundPool no-ops if sample not ready yet
         pool.play(soundId, volume, volume, 1, 0, 1.0f)
     }
 

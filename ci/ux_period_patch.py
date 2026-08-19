@@ -103,8 +103,8 @@ if "_tickAgeItem" not in t or "useMagnifier" not in t:
         t = t.replace(
             "  Future<void> _tick() async {",
             "  void _tickAgeItem() {\n"
-            "    try { SystemSound.play(SystemSoundType.click); } catch (_) {}\n"
-            "    try { HapticFeedback.selectionClick(); } catch (_) {}\n"
+            "    // Same native path as Sleep Counter (SoundPool tick + haptic)\n"
+            "    AudioService.instance.tick();\n"
             "  }\n\n"
             "  Future<void> _tick() async {",
             1,
