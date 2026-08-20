@@ -9,6 +9,7 @@ import 'dreams_screen.dart';
 import 'ai_chat_screen.dart';
 import 'profile_screen.dart';
 import 'stats_screen.dart';
+import 'period_screen.dart';
 
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -20,23 +21,91 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   int _index = 0;
 
-  final _pages = const [
-    HomeScreen(),
-    HabitsScreen(),
-    DreamsScreen(),
-    AiChatScreen(),
-    StatsScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final t = L10n.of(state.profile.locale);
     final accent = AppColors.accentFrom(state.profile.accentColor);
+    final showPeriod =
+        state.profile.isFemale && state.profile.trackPeriod;
+
+    // Order: Home, Habits, [Period if shown], Dreams, AI, Stats, Profile
+    final pages = <Widget>[
+      const HomeScreen(),
+      const HabitsScreen(),
+      if (showPeriod) const PeriodScreen(),
+      const DreamsScreen(),
+      const AiChatScreen(),
+      const StatsScreen(),
+      const ProfileScreen(),
+    ];
+
+    // Clamp safely without side-effects during build when possible
+    final safeIndex = _index.clamp(0, pages.length - 1);
+    if (safeIndex != _index) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _index = safeIndex);
+      });
+    }
+
+    final isAr = state.profile.locale.startsWith('ar');
+    final periodLabel = isAr ? 'الدورة' : 'Period';
+
+    final navItems = <Widget>[
+      _NavItem(
+        icon: Icons.home_rounded,
+        label: t.home,
+        selected: safeIndex == 0,
+        accent: accent,
+        onTap: () => setState(() => _index = 0),
+      ),
+      _NavItem(
+        icon: Icons.check_circle_outline_rounded,
+        label: t.habits,
+        selected: safeIndex == 1,
+        accent: accent,
+        onTap: () => setState(() => _index = 1),
+      ),
+      if (showPeriod)
+        _NavItem(
+          icon: Icons.water_drop_rounded,
+          label: periodLabel,
+          selected: safeIndex == 2,
+          accent: accent,
+          onTap: () => setState(() => _index = 2),
+        ),
+      _NavItem(
+        icon: Icons.auto_awesome_rounded,
+        label: t.dreams,
+        selected: safeIndex == (showPeriod ? 3 : 2),
+        accent: accent,
+        onTap: () => setState(() => _index = showPeriod ? 3 : 2),
+      ),
+      _NavItem(
+        icon: Icons.smart_toy_rounded,
+        label: t.ai,
+        selected: safeIndex == (showPeriod ? 4 : 3),
+        accent: accent,
+        onTap: () => setState(() => _index = showPeriod ? 4 : 3),
+      ),
+      _NavItem(
+        icon: Icons.bar_chart_rounded,
+        label: t.stats,
+        selected: safeIndex == (showPeriod ? 5 : 4),
+        accent: accent,
+        onTap: () => setState(() => _index = showPeriod ? 5 : 4),
+      ),
+      _NavItem(
+        icon: Icons.person_rounded,
+        label: t.profile,
+        selected: safeIndex == (showPeriod ? 6 : 5),
+        accent: accent,
+        onTap: () => setState(() => _index = showPeriod ? 6 : 5),
+      ),
+    ];
 
     return Scaffold(
-      body: IndexedStack(index: _index, children: _pages),
+      body: IndexedStack(index: safeIndex, children: pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).brightness == Brightness.dark
@@ -61,50 +130,7 @@ class _RootShellState extends State<RootShell> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                  icon: Icons.home_rounded,
-                  label: t.home,
-                  selected: _index == 0,
-                  accent: accent,
-                  onTap: () => setState(() => _index = 0),
-                ),
-                _NavItem(
-                  icon: Icons.check_circle_outline_rounded,
-                  label: t.habits,
-                  selected: _index == 1,
-                  accent: accent,
-                  onTap: () => setState(() => _index = 1),
-                ),
-                _NavItem(
-                  icon: Icons.auto_awesome_rounded,
-                  label: t.dreams,
-                  selected: _index == 2,
-                  accent: accent,
-                  onTap: () => setState(() => _index = 2),
-                ),
-                _NavItem(
-                  icon: Icons.smart_toy_rounded,
-                  label: t.ai,
-                  selected: _index == 3,
-                  accent: accent,
-                  onTap: () => setState(() => _index = 3),
-                ),
-                _NavItem(
-                  icon: Icons.bar_chart_rounded,
-                  label: t.stats,
-                  selected: _index == 4,
-                  accent: accent,
-                  onTap: () => setState(() => _index = 4),
-                ),
-                _NavItem(
-                  icon: Icons.person_rounded,
-                  label: t.profile,
-                  selected: _index == 5,
-                  accent: accent,
-                  onTap: () => setState(() => _index = 5),
-                ),
-              ],
+              children: navItems,
             ),
           ),
         ),

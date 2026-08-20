@@ -16,6 +16,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
 
   int _currentPage = 0;
+  bool? _isFemale;
+  bool _trackPeriod = false;
 
   @override
   void dispose() {
@@ -38,6 +40,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (name.isNotEmpty) {
       state.profile.name = name;
     }
+
+    state.profile.isFemale = _isFemale ?? false;
+    state.profile.trackPeriod = (_isFemale == true) && _trackPeriod;
 
     state.completeOnboarding();
   }
@@ -200,9 +205,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildGoalsPage() {
+    final isArabic = context.read<AppState>().profile.locale.startsWith('ar');
     return Padding(
       padding: const EdgeInsets.all(32),
-      child: Center(
+      child: SingleChildScrollView(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -252,7 +258,91 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 28),
+            Text(
+              isArabic ? 'الجنس' : 'Gender',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _genderChoice(
+                    label: isArabic ? 'ذكر' : 'Male',
+                    selected: _isFemale == false,
+                    onTap: () => setState(() {
+                      _isFemale = false;
+                      _trackPeriod = false;
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _genderChoice(
+                    label: isArabic ? 'أنثى' : 'Female',
+                    selected: _isFemale == true,
+                    onTap: () => setState(() => _isFemale = true),
+                  ),
+                ),
+              ],
+            ),
+            if (_isFemale == true) ...[
+              const SizedBox(height: 20),
+              Card(
+                child: SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  title: Text(
+                    isArabic ? 'متابعة الدورة الشهرية' : 'Track period',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    isArabic
+                        ? 'اختياري — يمكنك تفعيلها لاحقاً'
+                        : 'Optional — you can enable later',
+                  ),
+                  value: _trackPeriod,
+                  activeColor: const Color(0xFFF9A8D4),
+                  onChanged: (v) => setState(() => _trackPeriod = v),
+                ),
+              ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _genderChoice({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Material(
+      color: selected ? primary.withOpacity(0.18) : Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? primary : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? primary : null,
+            ),
+          ),
         ),
       ),
     );

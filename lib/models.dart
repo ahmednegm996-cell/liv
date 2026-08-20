@@ -19,6 +19,7 @@ class UserProfile {
   List<String> jobs;
   List<String> goals;
   bool isFemale;
+  bool trackPeriod;
   DateTime? lastPeriodStart;
   int cycleLengthDays;
   int periodLengthDays;
@@ -39,6 +40,7 @@ class UserProfile {
     this.jobs = const [],
     this.goals = const [],
     this.isFemale = false,
+    this.trackPeriod = false,
     this.lastPeriodStart,
     this.cycleLengthDays = 28,
     this.periodLengthDays = 5,
@@ -60,6 +62,7 @@ class UserProfile {
         'jobs': jobs,
         'goals': goals,
         'isFemale': isFemale,
+        'trackPeriod': trackPeriod,
         'lastPeriodStart': lastPeriodStart?.toIso8601String(),
         'cycleLengthDays': cycleLengthDays,
         'periodLengthDays': periodLengthDays,
@@ -81,6 +84,7 @@ class UserProfile {
         jobs: List<String>.from(j['jobs'] ?? []),
         goals: List<String>.from(j['goals'] ?? []),
         isFemale: j['isFemale'] ?? false,
+        trackPeriod: j['trackPeriod'] ?? false,
         lastPeriodStart: j['lastPeriodStart'] != null ? DateTime.tryParse(j['lastPeriodStart']) : null,
         cycleLengthDays: j['cycleLengthDays'] ?? 28,
         periodLengthDays: j['periodLengthDays'] ?? 5,
