@@ -209,12 +209,12 @@ jobs:
           )
           if not m:
               raise SystemExit("ERROR: final progress circle not found")
-          if m.group(1) != "90" or m.group(2) != "90":
-              raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 90x90")
+          if m.group(1) != "120" or m.group(2) != "120":
+              raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 120x120")
           print(f"VALIDATE home circle: {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
           # Print the actual source lines used for the ring
           for line in h.splitlines():
-              if re.search(r"width:\s*90|height:\s*90|strokeWidth:\s*7|fontSize:\s*16", line):
+              if re.search(r"width:\s*120|height:\s*120|strokeWidth:\s*8|fontSize:\s*18", line):
                   if "progress" in h[max(0, h.find(line)-200):h.find(line)+200] or True:
                       print("FINAL CIRCLE LINE:", line.strip())
           PY
@@ -290,7 +290,7 @@ jobs:
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart
           grep -q "_pendingAction" lib/screens/ai_chat_screen.dart || grep -q "addHabit" lib/screens/ai_chat_screen.dart
-          echo "VERIFY Path B OK — ZIP home + circle 90, age/sleep tick via AudioService, native feedback"
+          echo "VERIFY Path B OK — ZIP home + circle 120, age/sleep tick via AudioService, native feedback"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
