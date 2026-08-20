@@ -322,13 +322,127 @@ jobs:
               if "class Gaps" in tt:
                   tt = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n", tt)
                   theme.write_text(tt.rstrip() + "\n", encoding="utf-8")
+                  print("Removed duplicate Gaps from app_theme.dart")
+
+          common = Path("lib/widgets/common.dart")
+          COMPLETE_GAPS = """
+          class Gaps {
+            static const h4 = SizedBox(height: 4);
+            static const h6 = SizedBox(height: 6);
+            static const h8 = SizedBox(height: 8);
+            static const h10 = SizedBox(height: 10);
+            static const h12 = SizedBox(height: 12);
+            static const h14 = SizedBox(height: 14);
+            static const h16 = SizedBox(height: 16);
+            static const h18 = SizedBox(height: 18);
+            static const h20 = SizedBox(height: 20);
+            static const h24 = SizedBox(height: 24);
+            static const h28 = SizedBox(height: 28);
+            static const h32 = SizedBox(height: 32);
+            static const w8 = SizedBox(width: 8);
+            static const w12 = SizedBox(width: 12);
+            static const w16 = SizedBox(width: 16);
+          }
+          """
+          if common.exists():
+              t = common.read_text(encoding="utf-8")
+              if "class Gaps" in t:
+                  t = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n", t)
+              else:
+                  t = t.rstrip() + "\n" + textwrap.dedent(COMPLETE_GAPS).strip() + "\n"
+              common.write_text(t.rstrip() + "\n", encoding="utf-8")
+              print("Gaps canonical in common.dart")
+
+          gs = Path("lib/services/gemini_service.dart")
+          if gs.exists():
+              g = gs.read_text(encoding="utf-8")
+              if "Keep growing with LIV" in g:
+                  g = re.sub(
+                      r"Future<String>\s+personalityInsight[\s\S]*?Keep growing with LIV![\s\S]*?\n  \}",
+                      "",
+                      g,
+                  )
+                  gs.write_text(g, encoding="utf-8")
+                  print("Removed Keep growing placeholder")
+              if "personalityInsight" not in g:
+                  print("WARNING: personalityInsight missing")
+              else:
+                  print("personalityInsight present")
+          for f in [Path("android/app/build.gradle"), Path("android/app/build.gradle.kts")]:
+              if not f.exists():
+                  continue
+              t = f.read_text(encoding="utf-8")
+              t = re.sub(r"minifyEnabled\s+[^\n]+", "minifyEnabled false", t)
+              t = re.sub(r"shrinkResources\s+[^\n]+", "shrinkResources false", t)
+              f.write_text(t, encoding="utf-8")
           PY
 
-      - name: Flutter pub get
+      - name: Force compileSdk 35 + permissions + no backup
+        run: |
+          set -e
+          for f in android/app/build.gradle android/app/build.gradle.kts; do
+            [ -f "$f" ] && sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" || true
+            [ -f "$f" ] && sed -i -E 's/targetSdk\s*=\s*[0-9]+/targetSdk = 35/' "$f" || true
+          done
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          if not p.exists():
+              raise SystemExit(0)
+          text = p.read_text(encoding="utf-8")
+          for perm in ['android.permission.INTERNET','android.permission.VIBRATE','android.permission.RECORD_AUDIO']:
+              if perm not in text:
+                  text = re.sub(r'(<manifest[^>]*>)', r'\1\n    <uses-permission android:name="'+perm+'"/>', text, count=1)
+          text = re.sub(r'android:label="[^"]*"', 'android:label="LIV"', text, count=1)
+          if 'allowBackup' not in text:
+              text = text.replace('<application', '<application android:allowBackup="false" android:fullBackupContent="false"', 1)
+          p.write_text(text, encoding="utf-8")
+          print("Permissions + allowBackup=false OK")
+          PY
+
+      - name: Bump Kotlin AGP Gradle if needed
+        run: |
+          if [ -f android/settings.gradle ]; then
+            sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\11.9.22\2/' android/settings.gradle || true
+            sed -i -E 's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' android/settings.gradle || true
+          fi
+          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+            sed -i -E 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' android/gradle/wrapper/gradle-wrapper.properties || true
+          fi
+
+      - name: Setup fixed release signing
+        run: |
+          set -e
+          mkdir -p android/app
+          USE_RELEASE_SIGNING=0
+          if [ -f ci/ks.b64 ]; then
+            base64 -d ci/ks.b64 > android/app/liv-release.keystore
+            if keytool -list -keystore android/app/liv-release.keystore -storepass liv2026secure -alias liv >/dev/null 2>&1; then
+              USE_RELEASE_SIGNING=1
+            else
+              rm -f android/app/liv-release.keystore
+            fi
+          fi
+          if [ "$USE_RELEASE_SIGNING" = "1" ]; then
+            printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
+          fi
+          python3 ci/fix_signing.py
+
+      - name: Get dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Generate app icon
+        run: dart run flutter_launcher_icons || true
+
+      - name: Build APK (Release)
+        run: |
+          set -e
+          flutter build apk --release --no-tree-shake-icons 2>&1 | tee /tmp/flutter_build.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            tail -100 /tmp/flutter_build.log || true
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
