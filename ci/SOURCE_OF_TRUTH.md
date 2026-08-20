@@ -32,7 +32,7 @@ Current intended size (progress ring):
 
 - **160×160**
 - strokeWidth **7**
-- percent fontSize **14** (ZIP original — never scale text with diameter)
+- percent fontSize **16** (restored from Build 246)
 
 ZIP baseline before patch is 70×70 stroke 6 font 14.
 
