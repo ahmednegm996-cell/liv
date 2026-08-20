@@ -212,9 +212,9 @@ jobs:
           if m.group(1) != "160" or m.group(2) != "160":
               raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 160x160")
           print(f"VALIDATE home circle: {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
-          # Print the actual source lines used for the ring
+          # Print the actual source lines used for the ring (synced to font 16 = Build 246 content)
           for line in h.splitlines():
-              if re.search(r"width:\s*160|height:\s*160|strokeWidth:\s*7|fontSize:\s*14", line):
+              if re.search(r"width:\s*160|height:\s*160|strokeWidth:\s*7|fontSize:\s*16", line):
                   if "progress" in h[max(0, h.find(line)-200):h.find(line)+200] or True:
                       print("FINAL CIRCLE LINE:", line.strip())
           PY
@@ -290,7 +290,7 @@ jobs:
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart
           grep -q "_pendingAction" lib/screens/ai_chat_screen.dart || grep -q "addHabit" lib/screens/ai_chat_screen.dart
-          echo "VERIFY Path B OK — ZIP home + circle 160 (font 14 original), age/sleep tick via AudioService, native feedback"
+          echo "VERIFY Path B OK — ZIP home + circle 160 (font 16 = Build 246 content), age/sleep tick via AudioService, native feedback"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
