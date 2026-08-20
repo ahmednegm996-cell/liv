@@ -2,7 +2,8 @@
 """Single source for Home progress circle size on the ZIP HomeScreen.
 
 Apply AFTER ZIP extract + overlays + ZIP re-lock.
-Edits ONLY the daily progress ring (value: progress): size, stroke, percent font.
+Edits ONLY the daily progress ring (value: progress): outer SizedBox size + stroke.
+Percent font stays at ZIP original (14) — do NOT scale internal text with diameter.
 No OverflowBox. No other UI / audio / AI changes.
 """
 from pathlib import Path
@@ -10,9 +11,9 @@ import re
 import sys
 
 HOME = Path("lib/screens/home_screen.dart")
-TARGET_SIZE = 120
-TARGET_STROKE = "8"
-TARGET_FONT = "18"
+TARGET_SIZE = 160
+TARGET_STROKE = "7"
+TARGET_FONT = "14"
 
 
 def main() -> None:

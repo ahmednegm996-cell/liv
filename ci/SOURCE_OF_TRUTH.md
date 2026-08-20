@@ -30,9 +30,9 @@ CI does `rm -rf lib` then restores lib from the ZIP. Editing only the repo home 
 
 Current intended size (progress ring):
 
-- **120×120**
-- strokeWidth **8**
-- percent fontSize **18**
+- **160×160**
+- strokeWidth **7**
+- percent fontSize **14** (ZIP original — never scale text with diameter)
 
 ZIP baseline before patch is 70×70 stroke 6 font 14.
 
@@ -62,7 +62,7 @@ To change size later: edit `TARGET_SIZE` / stroke / font in `ci/home_circle_patc
 - Final AudioService from repo (`meditationVolume = 1.0`, `liv.feedback`)
 - Final MainActivity has `liv.feedback` + `USAGE_MEDIA`
 - WAV tick/click present under `res/raw`
-- Progress circle **120×120**, no OverflowBox
+- Progress circle **160×160**, no OverflowBox
 - No global tick→buttonClick in patches
 - AI + Onboarding use AudioService only
 
