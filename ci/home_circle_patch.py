@@ -3,7 +3,7 @@
 
 Apply AFTER ZIP extract + overlays + ZIP re-lock.
 Edits ONLY the daily progress ring (value: progress): outer SizedBox size + stroke.
-Percent font stays at ZIP original (14) — do NOT scale internal text with diameter.
+Percent font set to 16 (as in Build 246) — internal content restored.
 No OverflowBox. No other UI / audio / AI changes.
 """
 from pathlib import Path
@@ -13,7 +13,7 @@ import sys
 HOME = Path("lib/screens/home_screen.dart")
 TARGET_SIZE = 160
 TARGET_STROKE = "7"
-TARGET_FONT = "14"
+TARGET_FONT = "16"
 
 
 def main() -> None:
