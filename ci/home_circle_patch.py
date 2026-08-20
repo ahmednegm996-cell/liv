@@ -10,9 +10,9 @@ import re
 import sys
 
 HOME = Path("lib/screens/home_screen.dart")
-TARGET_SIZE = 90
-TARGET_STROKE = "7"
-TARGET_FONT = "16"
+TARGET_SIZE = 120
+TARGET_STROKE = "8"
+TARGET_FONT = "18"
 
 
 def main() -> None:
