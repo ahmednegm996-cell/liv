@@ -42,13 +42,13 @@ jobs:
             cp android/app/src/main/kotlin/com/liv/MainActivity.kt /tmp/liv_sot/MainActivity.kt
             echo "Preserved repo MainActivity"
           fi
-          # Phase 5: preserve Phase 4 simplified architecture sources so Path B does not discard them
-          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart; do
+          # Phase 8C: preserve Phase 4 simplified architecture sources + stats/profile/app_state so Path B does not discard them
+          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart; do
             if [ -f "$f" ]; then
               cp "$f" /tmp/liv_sot/$(basename "$f")
-              echo "Preserved Phase 4 $f"
+              echo "Preserved Phase 4/8C $f"
             else
-              echo "ERROR: repo missing $f (required for Phase 5)" && exit 1
+              echo "ERROR: repo missing $f (required for Phase 8C)" && exit 1
             fi
           done
           LONG="assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
@@ -110,15 +110,18 @@ jobs:
           grep -q "meditationVolume = 1.0" lib/services/audio_service.dart
           grep -q "MethodChannel('liv.feedback')" lib/services/audio_service.dart
 
-          # Phase 5: restore Phase 4 simplified architecture (models + onboarding + root_shell + period_screen)
+          # Phase 8C: restore Phase 4 simplified architecture + stats/profile/app_state
           # Do NOT curl the obsolete 1144-line onboarding. Do NOT run obsolete period patches.
           mkdir -p lib/screens lib/services
           cp /tmp/liv_sot/models.dart lib/models.dart
           cp /tmp/liv_sot/onboarding_screen.dart lib/screens/onboarding_screen.dart
           cp /tmp/liv_sot/root_shell.dart lib/screens/root_shell.dart
           cp /tmp/liv_sot/period_screen.dart lib/screens/period_screen.dart
-          echo "RESTORED Phase 4 models / onboarding / root_shell / period_screen"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart
+          cp /tmp/liv_sot/stats_screen.dart lib/screens/stats_screen.dart
+          cp /tmp/liv_sot/profile_screen.dart lib/screens/profile_screen.dart
+          cp /tmp/liv_sot/app_state.dart lib/services/app_state.dart
+          echo "RESTORED Phase 4/8C models / onboarding / root_shell / period_screen / stats / profile / app_state"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart
 
           # Obsolete patches disabled (they target pre-Phase-4 String gender + complex onboarding):
           # if [ -f ci/ux_period_patch.py ]; then python3 ci/ux_period_patch.py; fi
@@ -168,11 +171,14 @@ jobs:
             echo "ERROR: ci/home_circle_patch.py missing" && exit 1
           fi
 
-          # Phase 5 final re-lock: guarantee simplified architecture sources were not overwritten
+          # Phase 8C final re-lock: guarantee simplified architecture sources + stats/profile/app_state were not overwritten
           cp /tmp/liv_sot/models.dart lib/models.dart
           cp /tmp/liv_sot/onboarding_screen.dart lib/screens/onboarding_screen.dart
           cp /tmp/liv_sot/root_shell.dart lib/screens/root_shell.dart
           cp /tmp/liv_sot/period_screen.dart lib/screens/period_screen.dart
+          cp /tmp/liv_sot/stats_screen.dart lib/screens/stats_screen.dart
+          cp /tmp/liv_sot/profile_screen.dart lib/screens/profile_screen.dart
+          cp /tmp/liv_sot/app_state.dart lib/services/app_state.dart
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
 
           echo "======== FINAL SOURCE HASHES ========"
@@ -182,8 +188,8 @@ jobs:
           sha256sum lib/services/audio_service.dart
           echo "FINAL MAIN ACTIVITY:"
           sha256sum android/app/src/main/kotlin/com/liv/MainActivity.kt
-          echo "FINAL Phase 4 models / onboarding / root_shell / period_screen:"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart
+          echo "FINAL Phase 4/8C models / onboarding / root_shell / period_screen / stats / profile / app_state:"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart
           echo "===================================="
 
           if grep -q "OverflowBox" lib/screens/home_screen.dart; then
