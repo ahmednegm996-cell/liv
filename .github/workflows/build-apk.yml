@@ -250,7 +250,7 @@ jobs:
           if ! grep -q "liv.feedback" android/app/src/main/kotlin/com/liv/MainActivity.kt; then
             echo "ERROR: MainActivity missing liv.feedback" && exit 1
           fi
-          if ! grep -q '\"tick\"' android/app/src/main/kotlin/com/liv/MainActivity.kt; then
+          if ! grep -q '"tick"' android/app/src/main/kotlin/com/liv/MainActivity.kt; then
             echo "ERROR: MainActivity missing tick handler" && exit 1
           fi
           if ! grep -q "onCreate" android/app/src/main/kotlin/com/liv/MainActivity.kt; then
