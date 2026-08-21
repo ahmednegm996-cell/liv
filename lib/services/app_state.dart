@@ -148,9 +148,14 @@ class AppState extends ChangeNotifier {
   List<TaskItem> get thisWeekTasks =>
       tasks.where((t) => t.category == 'daily' || t.category == 'custom').toList();
 
-  TaskItem? get dailyChallenge {
+  /// Protected home_screen expects String for Text(state.dailyChallenge).
+  /// Derive from Phase-4 TaskItem.title only; never return TaskItem? or null.
+  String get dailyChallenge {
     final open = tasks.where((t) => !t.done && t.category == 'daily').toList();
-    return open.isEmpty ? null : open.first;
+    if (open.isEmpty) {
+      return profile.locale.startsWith('ar') ? 'مفيش تحدي يومي' : 'No daily challenge';
+    }
+    return open.first.title;
   }
 
   Future<void> markHabitToday(Habit habit) async {
