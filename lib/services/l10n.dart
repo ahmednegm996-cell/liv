@@ -3,6 +3,8 @@ class L10n {
   final String locale; // ar_eg | ar | en
   const L10n(this.locale);
 
+  static L10n of(String locale) => L10n(locale);
+
   bool get isEn => locale == 'en';
   bool get isFusha => locale == 'ar';
   bool get isMasry => locale == 'ar_eg';
@@ -11,6 +13,31 @@ class L10n {
     final map = _maps[locale] ?? _maps['ar_eg']!;
     return map[key] ?? key;
   }
+
+  // Convenience getters used by screens
+  String get app_name => t('app_name');
+  String get home => t('home');
+  String get habits => t('habits');
+  String get dreams => t('dreams');
+  String get stats => t('stats');
+  String get profile => t('profile');
+  String get ai => t('ai');
+  String get add_habit => t('add_habit');
+  String get add_dream => t('add_dream');
+  String get no_habits => t('no_habits');
+  String get no_dreams => t('no_dreams');
+  String get points => t('points');
+  String get level => t('level');
+  String get goals => t('goals');
+  String get age => t('age');
+  String get sleep => t('sleep');
+  String get name => t('name');
+  String get height => t('height');
+  String get job_field => t('job_field');
+  String get hearts => t('hearts');
+  String get periodTracking => t('periodTracking');
+  String get morningRoutine => t('morningRoutine');
+  String get next => t('next');
 
   static const Map<String, Map<String, String>> _maps = {
     'ar_eg': {
@@ -33,6 +60,10 @@ class L10n {
       'name': 'الاسم',
       'height': 'الطول (سم)',
       'job_field': 'مجال الشغل',
+      'hearts': 'قلوب',
+      'periodTracking': 'تتبع الدورة',
+      'morningRoutine': 'روتين الصباح',
+      'next': 'التالي',
     },
     'ar': {
       'app_name': 'ليف',
@@ -54,6 +85,10 @@ class L10n {
       'name': 'الاسم',
       'height': 'الطول (سم)',
       'job_field': 'مجال العمل',
+      'hearts': 'قلوب',
+      'periodTracking': 'تتبع الدورة',
+      'morningRoutine': 'روتين الصباح',
+      'next': 'التالي',
     },
     'en': {
       'app_name': 'LIV',
@@ -75,6 +110,10 @@ class L10n {
       'name': 'Name',
       'height': 'Height (cm)',
       'job_field': 'Work field',
+      'hearts': 'Hearts',
+      'periodTracking': 'Period tracking',
+      'morningRoutine': 'Morning routine',
+      'next': 'Next',
     },
   };
 }
