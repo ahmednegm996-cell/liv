@@ -34,7 +34,7 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(seedColor: primary, brightness: Brightness.light),
       textTheme: GoogleFonts.interTextTheme(),
       appBarTheme: AppBarTheme(centerTitle: true, backgroundColor: primary.withOpacity(0.08)),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: Colors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -51,7 +51,7 @@ class AppTheme {
       scaffoldBackgroundColor: const Color(0xFF0F0F14),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       appBarTheme: AppBarTheme(centerTitle: true, backgroundColor: primary.withOpacity(0.12)),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: const Color(0xFF1A1A22),
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
