@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
 import '../services/l10n.dart';
-import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'habits_screen.dart';
 import 'dreams_screen.dart';
@@ -25,18 +24,18 @@ class _RootShellState extends State<RootShell> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final t = L10n.of(state.profile.locale);
-    final accent = AppColors.accentFrom(state.profile.accentColor);
     final showPeriod =
         state.profile.isFemale && state.profile.trackPeriod;
 
-    // Order: Home, Habits, [Period if shown], Dreams, AI, Stats, Profile
+    // Order: Home → Habits → [Period] → AI → Stats → Dreams → Profile
+    final aiIndex = showPeriod ? 3 : 2;
     final pages = <Widget>[
       const HomeScreen(),
       const HabitsScreen(),
       if (showPeriod) const PeriodScreen(),
-      const DreamsScreen(),
-      const AiChatScreen(),
+      AIChatScreen(active: _index == aiIndex),
       const StatsScreen(),
+      const DreamsScreen(),
       const ProfileScreen(),
     ];
 
@@ -51,140 +50,56 @@ class _RootShellState extends State<RootShell> {
     final isAr = state.profile.locale.startsWith('ar');
     final periodLabel = isAr ? 'الدورة' : 'Period';
 
-    final navItems = <Widget>[
-      _NavItem(
-        icon: Icons.home_rounded,
+    final destinations = <NavigationDestination>[
+      NavigationDestination(
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home_rounded),
         label: t.home,
-        selected: safeIndex == 0,
-        accent: accent,
-        onTap: () => setState(() => _index = 0),
       ),
-      _NavItem(
-        icon: Icons.check_circle_outline_rounded,
+      NavigationDestination(
+        icon: const Icon(Icons.checklist_outlined),
+        selectedIcon: const Icon(Icons.checklist_rounded),
         label: t.habits,
-        selected: safeIndex == 1,
-        accent: accent,
-        onTap: () => setState(() => _index = 1),
       ),
       if (showPeriod)
-        _NavItem(
-          icon: Icons.water_drop_rounded,
+        NavigationDestination(
+          icon: const Icon(Icons.water_drop_outlined),
+          selectedIcon: const Icon(Icons.water_drop_rounded),
           label: periodLabel,
-          selected: safeIndex == 2,
-          accent: accent,
-          onTap: () => setState(() => _index = 2),
         ),
-      _NavItem(
-        icon: Icons.auto_awesome_rounded,
-        label: t.dreams,
-        selected: safeIndex == (showPeriod ? 3 : 2),
-        accent: accent,
-        onTap: () => setState(() => _index = showPeriod ? 3 : 2),
-      ),
-      _NavItem(
-        icon: Icons.smart_toy_rounded,
+      NavigationDestination(
+        icon: const Icon(Icons.auto_awesome_outlined),
+        selectedIcon: const Icon(Icons.auto_awesome_rounded),
         label: t.ai,
-        selected: safeIndex == (showPeriod ? 4 : 3),
-        accent: accent,
-        onTap: () => setState(() => _index = showPeriod ? 4 : 3),
       ),
-      _NavItem(
-        icon: Icons.bar_chart_rounded,
+      NavigationDestination(
+        icon: const Icon(Icons.bar_chart_outlined),
+        selectedIcon: const Icon(Icons.bar_chart_rounded),
         label: t.stats,
-        selected: safeIndex == (showPeriod ? 5 : 4),
-        accent: accent,
-        onTap: () => setState(() => _index = showPeriod ? 5 : 4),
       ),
-      _NavItem(
-        icon: Icons.person_rounded,
+      NavigationDestination(
+        icon: const Icon(Icons.star_outline_rounded),
+        selectedIcon: const Icon(Icons.star_rounded),
+        label: t.dreams,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.person_outline_rounded),
+        selectedIcon: const Icon(Icons.person_rounded),
         label: t.profile,
-        selected: safeIndex == (showPeriod ? 6 : 5),
-        accent: accent,
-        onTap: () => setState(() => _index = showPeriod ? 6 : 5),
       ),
     ];
 
     return Scaffold(
-      body: IndexedStack(index: safeIndex, children: pages),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.black.withOpacity(0.65)
-              : Colors.white.withOpacity(0.75),
-          border: Border(
-            top: BorderSide(
-              color: Colors.white.withOpacity(0.12),
-              width: 0.5,
-            ),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 24,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: navItems,
-            ),
-          ),
-        ),
+      body: IndexedStack(
+        index: safeIndex,
+        children: pages,
       ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final Color accent;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.accent,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? accent.withOpacity(0.18) : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: selected ? accent : Theme.of(context).iconTheme.color?.withOpacity(0.55),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? accent : Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: safeIndex,
+        onDestinationSelected: (i) {
+          setState(() => _index = i);
+        },
+        destinations: destinations,
       ),
     );
   }
