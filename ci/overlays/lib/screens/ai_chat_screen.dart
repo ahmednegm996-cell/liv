@@ -4,14 +4,14 @@ import '../services/app_state.dart';
 import '../services/audio_service.dart';
 import '../theme/app_theme.dart';
 
-class AIChatScreen extends StatefulWidget {
+class AiChatScreen extends StatefulWidget {
   final bool active;
-  const AIChatScreen({super.key, this.active = true});
+  const AiChatScreen({super.key, this.active = true});
   @override
-  State<AIChatScreen> createState() => _AIChatScreenState();
+  State<AiChatScreen> createState() => _AiChatScreenState();
 }
 
-class _AIChatScreenState extends State<AIChatScreen> {
+class _AiChatScreenState extends State<AiChatScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   final List<Map<String, String>> _messages = [];
@@ -38,7 +38,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   @override
-  void didUpdateWidget(covariant AIChatScreen oldWidget) {
+  void didUpdateWidget(covariant AiChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.active && !oldWidget.active) {
       AudioService.instance.playLoop(_asset, volume: AudioService.meditationVolume);
