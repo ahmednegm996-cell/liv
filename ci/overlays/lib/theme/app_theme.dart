@@ -67,3 +67,7 @@ class AppTheme {
 }
 
 Color mutedText(BuildContext context) => AppColors.secondaryText(context);
+
+/// Architecture-neutral subtle icon color (for protected HomeScreen)
+Color subtleIcon(BuildContext context) =>
+    Theme.of(context).colorScheme.onSurface.withOpacity(0.45);
