@@ -42,13 +42,13 @@ jobs:
             cp android/app/src/main/kotlin/com/liv/MainActivity.kt /tmp/liv_sot/MainActivity.kt
             echo "Preserved repo MainActivity"
           fi
-          # Phase 8D: preserve Phase 4 simplified architecture + stats/profile/app_state/common/l10n
-          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart; do
+          # Phase 8F Option B: preserve Phase 4 simplified architecture + stats/profile/app_state/common/l10n + adapted habits/dreams screens
+          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart; do
             if [ -f "$f" ]; then
               cp "$f" /tmp/liv_sot/$(basename "$f")
-              echo "Preserved Phase 4/8D $f"
+              echo "Preserved Phase 4/8F $f"
             else
-              echo "ERROR: repo missing $f (required for Phase 8D)" && exit 1
+              echo "ERROR: repo missing $f (required for Phase 8F)" && exit 1
             fi
           done
           LONG="assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
@@ -110,7 +110,7 @@ jobs:
           grep -q "meditationVolume = 1.0" lib/services/audio_service.dart
           grep -q "MethodChannel('liv.feedback')" lib/services/audio_service.dart
 
-          # Phase 8D: restore Phase 4 simplified architecture + stats/profile/app_state/common/l10n
+          # Phase 8F Option B: restore Phase 4 simplified architecture + stats/profile/app_state/common/l10n + adapted habits/dreams
           # Do NOT curl the obsolete 1144-line onboarding. Do NOT run obsolete period patches.
           mkdir -p lib/screens lib/services lib/widgets
           cp /tmp/liv_sot/models.dart lib/models.dart
@@ -122,8 +122,10 @@ jobs:
           cp /tmp/liv_sot/app_state.dart lib/services/app_state.dart
           cp /tmp/liv_sot/common.dart lib/widgets/common.dart
           cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
-          echo "RESTORED Phase 4/8D models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart
+          cp /tmp/liv_sot/habits_screen.dart lib/screens/habits_screen.dart
+          cp /tmp/liv_sot/dreams_screen.dart lib/screens/dreams_screen.dart
+          echo "RESTORED Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n / habits / dreams"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
 
           # Obsolete patches disabled (they target pre-Phase-4 String gender + complex onboarding):
           # if [ -f ci/ux_period_patch.py ]; then python3 ci/ux_period_patch.py; fi
@@ -173,7 +175,7 @@ jobs:
             echo "ERROR: ci/home_circle_patch.py missing" && exit 1
           fi
 
-          # Phase 8D final re-lock: guarantee simplified architecture sources + stats/profile/app_state/common/l10n were not overwritten
+          # Phase 8F final re-lock: guarantee simplified architecture sources + stats/profile/app_state/common/l10n + habits/dreams were not overwritten
           cp /tmp/liv_sot/models.dart lib/models.dart
           cp /tmp/liv_sot/onboarding_screen.dart lib/screens/onboarding_screen.dart
           cp /tmp/liv_sot/root_shell.dart lib/screens/root_shell.dart
@@ -184,6 +186,8 @@ jobs:
           mkdir -p lib/widgets
           cp /tmp/liv_sot/common.dart lib/widgets/common.dart
           cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
+          cp /tmp/liv_sot/habits_screen.dart lib/screens/habits_screen.dart
+          cp /tmp/liv_sot/dreams_screen.dart lib/screens/dreams_screen.dart
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
 
           echo "======== FINAL SOURCE HASHES ========"
@@ -193,8 +197,8 @@ jobs:
           sha256sum lib/services/audio_service.dart
           echo "FINAL MAIN ACTIVITY:"
           sha256sum android/app/src/main/kotlin/com/liv/MainActivity.kt
-          echo "FINAL Phase 4/8D models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n:"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart
+          echo "FINAL Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n / habits / dreams:"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
           echo "===================================="
 
           if grep -q "OverflowBox" lib/screens/home_screen.dart; then
@@ -303,7 +307,7 @@ jobs:
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart
           grep -q "_pendingAction" lib/screens/ai_chat_screen.dart || grep -q "addHabit" lib/screens/ai_chat_screen.dart
-          echo "VERIFY Path B OK — ZIP home + circle 90 (exact Build 246: stroke 7 font 16), Phase 4 simplified onboarding + isFemale/trackPeriod, native feedback"
+          echo "VERIFY Path B OK — ZIP home + circle 90 (exact Build 246: stroke 7 font 16), Phase 4 simplified onboarding + isFemale/trackPeriod, native feedback, Phase-8F habits/dreams"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
