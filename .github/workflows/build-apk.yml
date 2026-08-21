@@ -27,7 +27,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Prepare project files (Path B — ZIP UI + repo audio)
+      - name: Prepare project files (Path B — ZIP UI + repo audio + repo Home)
         run: |
           set -e
 
@@ -42,7 +42,7 @@ jobs:
             cp android/app/src/main/kotlin/com/liv/MainActivity.kt /tmp/liv_sot/MainActivity.kt
             echo "Preserved repo MainActivity"
           fi
-          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart; do
+          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart lib/screens/home_screen.dart; do
             if [ -f "$f" ]; then
               cp "$f" /tmp/liv_sot/$(basename "$f")
               echo "Preserved Phase 4/8F $f"
@@ -76,31 +76,11 @@ jobs:
             echo "Applied ci/overlays over ZIP lib"
           fi
 
-          if [ ! -f lib/screens/home_screen.dart ]; then
-            echo "ERROR: home_screen.dart missing after ZIP" && exit 1
-          fi
-          cp lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart
-          echo "LOCKED HOME (from ZIP):"
-          sha256sum lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart
-
-          python3 << 'PY'
-          from pathlib import Path
-          import re
-          h = Path("lib/screens/home_screen.dart").read_text(encoding="utf-8")
-          if "OverflowBox" in h:
-              raise SystemExit("ERROR: ZIP home already has OverflowBox — unexpected")
-          m = re.search(
-              r"SizedBox\(\s*width:\s*(\d+)\s*,\s*height:\s*(\d+)\s*,\s*child:\s*Stack\([\s\S]{0,250}?"
-              r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*([\d.]+)",
-              h,
-          )
-          if not m:
-              raise SystemExit("ERROR: progress circle SizedBox not found in ZIP home")
-          w, ht, stroke = m.group(1), m.group(2), m.group(3)
-          if w != "70" or ht != "70":
-              raise SystemExit(f"ERROR: expected progress circle 70x70, got {w}x{ht}")
-          print(f"HOME CIRCLE OK from ZIP: {w}x{ht} stroke={stroke}")
-          PY
+          # Restore Commit-267 / repo Home UI — do NOT ZIP-lock home_screen
+          mkdir -p lib/screens
+          cp /tmp/liv_sot/home_screen.dart lib/screens/home_screen.dart
+          echo "RESTORED HOME from repo (Commit 267 baseline — not ZIP-locked):"
+          sha256sum lib/screens/home_screen.dart
 
           mkdir -p lib/services
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
@@ -122,8 +102,9 @@ jobs:
           cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
           cp /tmp/liv_sot/habits_screen.dart lib/screens/habits_screen.dart
           cp /tmp/liv_sot/dreams_screen.dart lib/screens/dreams_screen.dart
-          echo "RESTORED Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / storage_service / common / l10n / habits / dreams"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
+          cp /tmp/liv_sot/home_screen.dart lib/screens/home_screen.dart
+          echo "RESTORED Phase 4/8F models / onboarding / root_shell / period / stats / profile / app_state / storage / common / l10n / habits / dreams / HOME"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart lib/screens/home_screen.dart
 
           if [ -f ci/feedback_patch.py ]; then python3 ci/feedback_patch.py || echo "WARNING: feedback_patch non-fatal"; fi
 
@@ -158,16 +139,17 @@ jobs:
 
           python3 ci/soundtrack_patch.py
 
-          if ! cmp -s lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart; then
-            echo "WARNING: home_screen.dart changed after patches — restoring ZIP original"
-            cp /tmp/liv_sot/home_from_zip.dart lib/screens/home_screen.dart
-          fi
+          # Keep repo Home (Commit 267) — never re-lock to ZIP
+          cp /tmp/liv_sot/home_screen.dart lib/screens/home_screen.dart
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
 
-          if [ -f ci/home_circle_patch.py ]; then
-            python3 ci/home_circle_patch.py
+          # home_circle_patch is ZIP-only (value: progress). Repo Home uses 220 circle — skip.
+          if grep -q "value: progress" lib/screens/home_screen.dart; then
+            if [ -f ci/home_circle_patch.py ]; then
+              python3 ci/home_circle_patch.py
+            fi
           else
-            echo "ERROR: ci/home_circle_patch.py missing" && exit 1
+            echo "Skipping home_circle_patch — repo Home UI (Commit 267 baseline, no ZIP progress marker)"
           fi
 
           cp /tmp/liv_sot/models.dart lib/models.dart
@@ -183,37 +165,31 @@ jobs:
           cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
           cp /tmp/liv_sot/habits_screen.dart lib/screens/habits_screen.dart
           cp /tmp/liv_sot/dreams_screen.dart lib/screens/dreams_screen.dart
+          cp /tmp/liv_sot/home_screen.dart lib/screens/home_screen.dart
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
 
           echo "======== FINAL SOURCE HASHES ========"
-          echo "FINAL HOME SOURCE: lib/screens/home_screen.dart (ZIP + home_circle_patch)"
+          echo "FINAL HOME SOURCE: lib/screens/home_screen.dart (repo / Commit 267 baseline)"
           sha256sum lib/screens/home_screen.dart
           echo "FINAL AUDIO SERVICE:"
           sha256sum lib/services/audio_service.dart
           echo "FINAL MAIN ACTIVITY:"
           sha256sum android/app/src/main/kotlin/com/liv/MainActivity.kt
-          echo "FINAL Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / storage_service / common / l10n / habits / dreams:"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
+          echo "FINAL Phase 4/8F + HOME:"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart lib/screens/home_screen.dart
           echo "===================================="
 
           if grep -q "OverflowBox" lib/screens/home_screen.dart; then
             echo "ERROR: OverflowBox in final home_screen" && exit 1
           fi
-          python3 << 'PY'
-          from pathlib import Path
-          import re
-          h = Path("lib/screens/home_screen.dart").read_text(encoding="utf-8")
-          m = re.search(
-              r"SizedBox\(\s*width:\s*(\d+)\s*,\s*height:\s*(\d+)\s*,\s*child:\s*Stack\([\s\S]{0,250}?"
-              r"CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*([\d.]+)",
-              h,
-          )
-          if not m:
-              raise SystemExit("ERROR: final progress circle not found")
-          if m.group(1) != "90" or m.group(2) != "90":
-              raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 90x90")
-          print(f"VALIDATE home circle: {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
-          PY
+          # Validate repo Home (Commit 267): 220 circle + level label
+          if ! grep -q "width: 220" lib/screens/home_screen.dart; then
+            echo "ERROR: repo Home progress circle (width: 220) missing" && exit 1
+          fi
+          if ! grep -q "Lv " lib/screens/home_screen.dart; then
+            echo "ERROR: repo Home level label missing" && exit 1
+          fi
+          echo "VALIDATE home: Commit 267 baseline (220 circle + Lv)"
 
           if ! grep -q "bool isFemale" lib/models.dart; then
             echo "ERROR: models missing isFemale" && exit 1
@@ -288,7 +264,7 @@ jobs:
             echo "ERROR: Keep growing placeholder still present" && exit 1
           fi
           grep -q "personalityInsight" lib/services/gemini_service.dart || true
-          echo "VERIFY Path B OK"
+          echo "VERIFY Path B OK (repo Home + Phase-8 SoT)"
 
       - name: Ensure Android project (prefer committed modern config)
         run: |
