@@ -367,7 +367,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     state.ai.isConfigured
                         ? 'متصل • ${state.profile.aiProvider}'
                         : 'حط API Key من البروفايل',
-                    style: TextStyle(fontSize: 12, color: app_theme.AppColors.secondaryText(context)),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
                   ),
                 ],
               ),
@@ -533,7 +533,7 @@ class _Typing extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(width: 10),
-          Text('Liv بيفكر...', style: TextStyle(color: app_theme.AppColors.secondaryText(context), fontSize: 13)),
+          Text('Liv بيفكر...', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), fontSize: 13)),
         ],
       ),
     );
