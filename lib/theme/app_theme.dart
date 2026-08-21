@@ -66,6 +66,10 @@ class AppTheme {
   }
 }
 
+// Top-level helpers for protected ZIP call sites (expression-body form survives CI top-level strip regex)
+
+Color secondaryText(BuildContext context) => AppColors.secondaryText(context);
+
 Color mutedText(BuildContext context) => AppColors.secondaryText(context);
 
 /// Architecture-neutral subtle icon color (for protected HomeScreen)
