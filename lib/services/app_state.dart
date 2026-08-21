@@ -172,11 +172,15 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> toggleWeeklyTask(String id) async {
+  /// Accepts TaskItem (from protected home_screen) or String id.
+  Future<void> toggleWeeklyTask(Object taskOrId) async {
+    final String id = taskOrId is TaskItem ? taskOrId.id : taskOrId as String;
     await toggleTask(id);
   }
 
-  Future<void> deleteWeeklyTask(String id) async {
+  /// Accepts TaskItem (from protected home_screen) or String id.
+  Future<void> deleteWeeklyTask(Object taskOrId) async {
+    final String id = taskOrId is TaskItem ? taskOrId.id : taskOrId as String;
     await removeTask(id);
   }
 
