@@ -66,12 +66,6 @@ class AppTheme {
   }
 }
 
-// Top-level secondaryText uses block body so the CI strip regex matches
-// exactly this function and removes only it (leaves AppColors/AppTheme balanced).
-Color secondaryText(BuildContext context) {
-  return AppColors.secondaryText(context);
-}
-
 Color mutedText(BuildContext context) => AppColors.secondaryText(context);
 
 /// Architecture-neutral subtle icon color (for protected HomeScreen)
