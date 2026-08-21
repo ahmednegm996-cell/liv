@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models.dart';
 import 'storage_service.dart';
+import 'gemini_service.dart';
 
 class AppState extends ChangeNotifier {
   final _storage = StorageService();
@@ -46,7 +47,17 @@ class AppState extends ChangeNotifier {
     await saveProfile();
   }
 
-  Future<void> addHabit(Habit h) async {
+  /// Phase-4 primary + Phase-8D AI-overlay compatibility.
+  /// Accepts either a Habit instance or (name, isGood) from the AI overlay.
+  Future<void> addHabit(Object nameOrHabit, [bool isGood = true, {int points = 10}]) async {
+    final Habit h;
+    if (nameOrHabit is Habit) {
+      h = nameOrHabit;
+    } else if (nameOrHabit is String) {
+      h = Habit(title: nameOrHabit, isGood: isGood);
+    } else {
+      throw ArgumentError('addHabit expects Habit or String');
+    }
     habits.add(h);
     await _storage.saveHabits(habits.map((e) => e.toJson()).toList());
     notifyListeners();
@@ -90,4 +101,46 @@ class AppState extends ChangeNotifier {
     await _storage.saveTasks(tasks.map((e) => e.toJson()).toList());
     notifyListeners();
   }
+
+  // ========== Phase 8D Option-B compatibility layer ==========
+
+  Future<void> updateProfile(UserProfile Function(UserProfile) updater) async {
+    profile = updater(profile);
+    await saveProfile();
+  }
+
+  Future<void> addWeeklyTask(String title) async {
+    await addTask(TaskItem(title: title, category: 'daily', points: 10));
+  }
+
+  Future<void> addDreamWithAISteps(String title, String description) async {
+    await addDream(Dream(title: title, description: description.isEmpty ? null : description));
+  }
+
+  GeminiService get ai {
+    return GeminiService(
+      apiKey: profile.geminiApiKey,
+      model: profile.geminiModel,
+      provider: profile.aiProvider,
+    );
+  }
+
+  String get aiContext {
+    final buf = StringBuffer();
+    buf.writeln('User: ${profile.name.isEmpty ? "Guest" : profile.name}');
+    buf.writeln('Level: ${profile.level}, Points: ${profile.points}, Hearts: ${profile.hearts}');
+    if (profile.goals.isNotEmpty) buf.writeln('Goals: ${profile.goals.join(", ")}');
+    if (habits.isNotEmpty) {
+      buf.writeln('Habits: ${habits.take(8).map((h) => h.title).join(", ")}');
+    }
+    if (dreams.isNotEmpty) {
+      buf.writeln('Dreams: ${dreams.take(5).map((d) => d.title).join(", ")}');
+    }
+    if (tasks.isNotEmpty) {
+      final open = tasks.where((t) => !t.done).take(5).map((t) => t.title);
+      if (open.isNotEmpty) buf.writeln('Open tasks: ${open.join(", ")}');
+    }
+    return buf.toString().trim();
+  }
+
 }

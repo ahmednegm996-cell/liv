@@ -24,6 +24,11 @@ class UserProfile {
   int cycleLengthDays;
   int periodLengthDays;
   Map<String, dynamic> extras;
+  // Phase 8D compatibility for AI overlay
+  List<Map<String, String>> chatHistory;
+  String aiProvider;
+  String geminiApiKey;
+  String geminiModel;
 
   UserProfile({
     this.name = '',
@@ -45,7 +50,12 @@ class UserProfile {
     this.cycleLengthDays = 28,
     this.periodLengthDays = 5,
     Map<String, dynamic>? extras,
-  }) : extras = extras ?? {};
+    List<Map<String, String>>? chatHistory,
+    this.aiProvider = 'gemini',
+    this.geminiApiKey = '',
+    this.geminiModel = 'gemini-flash-lite-latest',
+  })  : extras = extras ?? {},
+        chatHistory = chatHistory ?? [];
 
   Map<String, dynamic> toJson() => {
         'name': name,
@@ -67,6 +77,10 @@ class UserProfile {
         'cycleLengthDays': cycleLengthDays,
         'periodLengthDays': periodLengthDays,
         'extras': extras,
+        'chatHistory': chatHistory,
+        'aiProvider': aiProvider,
+        'geminiApiKey': geminiApiKey,
+        'geminiModel': geminiModel,
       };
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
@@ -89,6 +103,15 @@ class UserProfile {
         cycleLengthDays: j['cycleLengthDays'] ?? 28,
         periodLengthDays: j['periodLengthDays'] ?? 5,
         extras: Map<String, dynamic>.from(j['extras'] ?? {}),
+        chatHistory: (j['chatHistory'] as List?)
+                ?.map((e) => Map<String, String>.from(
+                      (e as Map).map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')),
+                    ))
+                .toList() ??
+            [],
+        aiProvider: j['aiProvider'] ?? 'gemini',
+        geminiApiKey: j['geminiApiKey'] ?? '',
+        geminiModel: j['geminiModel'] ?? 'gemini-flash-lite-latest',
       );
 }
 
@@ -102,6 +125,9 @@ class Habit {
   bool isActive;
   DateTime createdAt;
   List<String> completedDates; // yyyy-MM-dd
+  // Phase 8D compatibility
+  bool isGood;
+  String get name => title;
 
   Habit({
     String? id,
@@ -113,6 +139,7 @@ class Habit {
     this.isActive = true,
     DateTime? createdAt,
     List<String>? completedDates,
+    this.isGood = true,
   })  : id = id ?? newId(),
         createdAt = createdAt ?? DateTime.now(),
         completedDates = completedDates ?? [];
@@ -127,6 +154,7 @@ class Habit {
         'isActive': isActive,
         'createdAt': createdAt.toIso8601String(),
         'completedDates': completedDates,
+        'isGood': isGood,
       };
 
   factory Habit.fromJson(Map<String, dynamic> j) => Habit(
@@ -139,6 +167,7 @@ class Habit {
         isActive: j['isActive'] ?? true,
         createdAt: DateTime.tryParse(j['createdAt'] ?? '') ?? DateTime.now(),
         completedDates: List<String>.from(j['completedDates'] ?? []),
+        isGood: j['isGood'] ?? true,
       );
 }
 
