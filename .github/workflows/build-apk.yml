@@ -3,7 +3,7 @@ name: Build APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, phase-8d-compat ]
 
 jobs:
   build:
@@ -42,13 +42,13 @@ jobs:
             cp android/app/src/main/kotlin/com/liv/MainActivity.kt /tmp/liv_sot/MainActivity.kt
             echo "Preserved repo MainActivity"
           fi
-          # Phase 8C: preserve Phase 4 simplified architecture sources + stats/profile/app_state so Path B does not discard them
-          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart; do
+          # Phase 8D: preserve Phase 4 simplified architecture + stats/profile/app_state/common/l10n
+          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart; do
             if [ -f "$f" ]; then
               cp "$f" /tmp/liv_sot/$(basename "$f")
-              echo "Preserved Phase 4/8C $f"
+              echo "Preserved Phase 4/8D $f"
             else
-              echo "ERROR: repo missing $f (required for Phase 8C)" && exit 1
+              echo "ERROR: repo missing $f (required for Phase 8D)" && exit 1
             fi
           done
           LONG="assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
@@ -110,9 +110,9 @@ jobs:
           grep -q "meditationVolume = 1.0" lib/services/audio_service.dart
           grep -q "MethodChannel('liv.feedback')" lib/services/audio_service.dart
 
-          # Phase 8C: restore Phase 4 simplified architecture + stats/profile/app_state
+          # Phase 8D: restore Phase 4 simplified architecture + stats/profile/app_state/common/l10n
           # Do NOT curl the obsolete 1144-line onboarding. Do NOT run obsolete period patches.
-          mkdir -p lib/screens lib/services
+          mkdir -p lib/screens lib/services lib/widgets
           cp /tmp/liv_sot/models.dart lib/models.dart
           cp /tmp/liv_sot/onboarding_screen.dart lib/screens/onboarding_screen.dart
           cp /tmp/liv_sot/root_shell.dart lib/screens/root_shell.dart
@@ -120,8 +120,10 @@ jobs:
           cp /tmp/liv_sot/stats_screen.dart lib/screens/stats_screen.dart
           cp /tmp/liv_sot/profile_screen.dart lib/screens/profile_screen.dart
           cp /tmp/liv_sot/app_state.dart lib/services/app_state.dart
-          echo "RESTORED Phase 4/8C models / onboarding / root_shell / period_screen / stats / profile / app_state"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart
+          cp /tmp/liv_sot/common.dart lib/widgets/common.dart
+          cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
+          echo "RESTORED Phase 4/8D models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart
 
           # Obsolete patches disabled (they target pre-Phase-4 String gender + complex onboarding):
           # if [ -f ci/ux_period_patch.py ]; then python3 ci/ux_period_patch.py; fi
@@ -171,7 +173,7 @@ jobs:
             echo "ERROR: ci/home_circle_patch.py missing" && exit 1
           fi
 
-          # Phase 8C final re-lock: guarantee simplified architecture sources + stats/profile/app_state were not overwritten
+          # Phase 8D final re-lock: guarantee simplified architecture sources + stats/profile/app_state/common/l10n were not overwritten
           cp /tmp/liv_sot/models.dart lib/models.dart
           cp /tmp/liv_sot/onboarding_screen.dart lib/screens/onboarding_screen.dart
           cp /tmp/liv_sot/root_shell.dart lib/screens/root_shell.dart
@@ -179,6 +181,9 @@ jobs:
           cp /tmp/liv_sot/stats_screen.dart lib/screens/stats_screen.dart
           cp /tmp/liv_sot/profile_screen.dart lib/screens/profile_screen.dart
           cp /tmp/liv_sot/app_state.dart lib/services/app_state.dart
+          mkdir -p lib/widgets
+          cp /tmp/liv_sot/common.dart lib/widgets/common.dart
+          cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
           cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
 
           echo "======== FINAL SOURCE HASHES ========"
@@ -188,8 +193,8 @@ jobs:
           sha256sum lib/services/audio_service.dart
           echo "FINAL MAIN ACTIVITY:"
           sha256sum android/app/src/main/kotlin/com/liv/MainActivity.kt
-          echo "FINAL Phase 4/8C models / onboarding / root_shell / period_screen / stats / profile / app_state:"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart
+          echo "FINAL Phase 4/8D models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n:"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart
           echo "===================================="
 
           if grep -q "OverflowBox" lib/screens/home_screen.dart; then
@@ -209,7 +214,6 @@ jobs:
           if m.group(1) != "90" or m.group(2) != "90":
               raise SystemExit(f"ERROR: final circle size {m.group(1)}x{m.group(2)} != 90x90")
           print(f"VALIDATE home circle: {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
-          # Print the actual source lines used for the ring (exact Build 246: 90 + font 16)
           for line in h.splitlines():
               if re.search(r"width:\s*90|height:\s*90|strokeWidth:\s*7|fontSize:\s*16", line):
                   if "progress" in h[max(0, h.find(line)-200):h.find(line)+200] or True:
@@ -232,7 +236,6 @@ jobs:
           if grep -q "Future<void> _tick\|HapticFeedback\|FixedExtentScrollController" lib/screens/onboarding_screen.dart; then
             echo "ERROR: obsolete complex onboarding (_tick / Haptic / age picker) detected" && exit 1
           fi
-          # Ensure obsolete period patches were NOT applied (they would have rewritten root_shell with gender string)
           if grep -q "state.profile.gender == 'female'" lib/screens/root_shell.dart; then
             echo "ERROR: obsolete period_nav_patch gender string still present in root_shell" && exit 1
           fi
