@@ -23,12 +23,6 @@ class AppColors {
       default: return purple;
     }
   }
-
-  /// Architecture-neutral secondary text (static so CI top-level strip cannot remove it)
-  static Color secondaryText(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? Colors.white60
-          : Colors.black54;
 }
 
 class AppTheme {
@@ -66,8 +60,10 @@ class AppTheme {
   }
 }
 
-Color mutedText(BuildContext context) => AppColors.secondaryText(context);
+Color mutedText(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? Colors.white60
+        : Colors.black54;
 
-/// Architecture-neutral subtle icon color (for protected HomeScreen)
 Color subtleIcon(BuildContext context) =>
     Theme.of(context).colorScheme.onSurface.withOpacity(0.45);
