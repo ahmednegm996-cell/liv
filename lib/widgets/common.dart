@@ -96,3 +96,30 @@ Future<String?> showTextInputDialog(
 Color secondaryText(BuildContext context) {
   return Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
 }
+
+/// Phase 8H+ thin visual adapter for protected home_screen HeartsRow caller.
+/// Accepts the existing named parameter `hearts` (int from UserProfile.hearts).
+class HeartsRow extends StatelessWidget {
+  final int hearts;
+  const HeartsRow({super.key, required this.hearts});
+
+  @override
+  Widget build(BuildContext context) {
+    final count = hearts.clamp(0, 10);
+    final accent = Theme.of(context).colorScheme.primary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (i) {
+        final filled = i < count;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1),
+          child: Icon(
+            filled ? Icons.favorite : Icons.favorite_border,
+            size: 18,
+            color: filled ? accent : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+          ),
+        );
+      }),
+    );
+  }
+}
