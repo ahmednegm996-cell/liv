@@ -23,6 +23,12 @@ class AppColors {
       default: return purple;
     }
   }
+
+  /// Architecture-neutral secondary text (static so CI top-level strip cannot remove it)
+  static Color secondaryText(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Colors.white60
+          : Colors.black54;
 }
 
 class AppTheme {
@@ -60,22 +66,4 @@ class AppTheme {
   }
 }
 
-// Architecture-neutral secondaryText (expression body so CI strip regex does not remove it)
-Color secondaryText(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-        ? Colors.white60
-        : Colors.black54;
-
-Color mutedText(BuildContext context) => secondaryText(context);
-
-Color strongText(BuildContext context) {
-  return Theme.of(context).brightness == Brightness.dark
-      ? Colors.white
-      : Colors.black87;
-}
-
-Color subtleIcon(BuildContext context) {
-  return Theme.of(context).brightness == Brightness.dark
-      ? Colors.white54
-      : Colors.black45;
-}
+Color mutedText(BuildContext context) => AppColors.secondaryText(context);
