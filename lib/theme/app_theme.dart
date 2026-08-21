@@ -66,9 +66,11 @@ class AppTheme {
   }
 }
 
-// Top-level helpers for protected ZIP call sites (expression-body form survives CI top-level strip regex)
-
-Color secondaryText(BuildContext context) => AppColors.secondaryText(context);
+// Top-level secondaryText uses block body so the CI strip regex matches
+// exactly this function and removes only it (leaves AppColors/AppTheme balanced).
+Color secondaryText(BuildContext context) {
+  return AppColors.secondaryText(context);
+}
 
 Color mutedText(BuildContext context) => AppColors.secondaryText(context);
 
