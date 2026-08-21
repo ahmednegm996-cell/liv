@@ -9,6 +9,7 @@ class AppColors {
   static const orange = Color(0xFFF97316);
   static const green = Color(0xFF22C55E);
   static const danger = Color(0xFFEF4444);
+  static const dangerDark = Color(0xFFDC2626);
   static const indigo = Color(0xFF6366F1);
 
   static Color accentFrom(String name) {
