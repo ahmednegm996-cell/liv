@@ -241,6 +241,9 @@ class TaskItem {
     this.category = 'daily',
   }) : id = id ?? newId();
 
+  /// Phase 8H+ thin alias for protected home_screen callers (ZIP uses isDone)
+  bool get isDone => done;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
