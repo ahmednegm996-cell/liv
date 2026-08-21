@@ -92,11 +92,6 @@ Future<String?> showTextInputDialog(
   return (result == null || result.isEmpty) ? null : result;
 }
 
-/// Phase 8H+ architecture-neutral secondary text color (used by AiChatScreen)
-Color secondaryText(BuildContext context) {
-  return Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
-}
-
 /// Phase 8H+ thin visual adapter for protected home_screen HeartsRow caller.
 /// Accepts the existing named parameter `hearts` (int from UserProfile.hearts).
 class HeartsRow extends StatelessWidget {
