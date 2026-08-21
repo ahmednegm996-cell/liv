@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
 import '../services/audio_service.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_theme.dart' as app_theme;
 
 class AiChatScreen extends StatefulWidget {
   final bool active;
@@ -242,7 +242,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     final state = context.watch<AppState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final danger = state.profile.hearts <= 0;
-    final accent = AppColors.accentFrom(state.profile.accentColor);
+    final accent = app_theme.AppColors.accentFrom(state.profile.accentColor);
 
     return Scaffold(
       body: Stack(
@@ -348,7 +348,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: danger
-                      ? [AppColors.danger, AppColors.dangerDark]
+                      ? [app_theme.AppColors.danger, app_theme.AppColors.dangerDark]
                       : [accent, accent.withOpacity(0.7)],
                 ),
                 borderRadius: BorderRadius.circular(16),
@@ -368,7 +368,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     state.ai.isConfigured
                         ? 'متصل • ${state.profile.aiProvider}'
                         : 'حط API Key من البروفايل',
-                    style: TextStyle(fontSize: 12, color: secondaryText(context)),
+                    style: TextStyle(fontSize: 12, color: app_theme.secondaryText(context)),
                   ),
                 ],
               ),
@@ -583,7 +583,7 @@ class _Typing extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Text('Liv بيفكر...', style: TextStyle(color: secondaryText(context), fontSize: 13)),
+          Text('Liv بيفكر...', style: TextStyle(color: app_theme.secondaryText(context), fontSize: 13)),
         ],
       ),
     );
