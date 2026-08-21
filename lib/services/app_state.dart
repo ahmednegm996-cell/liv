@@ -49,7 +49,7 @@ class AppState extends ChangeNotifier {
 
   /// Phase-4 primary + Phase-8D AI-overlay compatibility.
   /// Accepts either a Habit instance or (name, isGood) from the AI overlay.
-  Future<void> addHabit(Object nameOrHabit, [bool isGood = true], {int points = 10}) async {
+  Future<void> addHabit(Object nameOrHabit, [bool isGood = true]) async {
     final Habit h;
     if (nameOrHabit is Habit) {
       h = nameOrHabit;
