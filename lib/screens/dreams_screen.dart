@@ -22,13 +22,14 @@ class DreamsScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () async {
-              await state.addDream(Dream(title: state.profile.locale == 'en' ? 'New dream' : 'حلم جديد'));
+              final title = t.add_dream;
+              await state.addDream(Dream(title: title));
             },
           ),
         ],
       ),
       body: state.dreams.isEmpty
-          ? Center(child: Text(state.profile.locale == 'en' ? 'No dreams yet. Add one!' : 'لا أحلام بعد. أضف واحدًا!'))
+          ? Center(child: Text(t.no_dreams))
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: state.dreams.length,
@@ -37,14 +38,36 @@ class DreamsScreen extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GlassCard(
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(d.title),
-                      subtitle: LinearProgressIndicator(value: d.progress / 100, color: accent, backgroundColor: accent.withOpacity(0.15)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => state.removeDream(d.id),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(d.title),
+                          subtitle: d.description != null && d.description!.isNotEmpty
+                              ? Text(d.description!)
+                              : null,
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => state.removeDream(d.id),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                value: (d.progress.clamp(0, 100)) / 100,
+                                color: accent,
+                                backgroundColor: accent.withOpacity(0.15),
+                                minHeight: 6,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text('${d.progress}%', style: TextStyle(color: accent, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 );
