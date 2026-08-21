@@ -42,7 +42,7 @@ jobs:
             cp android/app/src/main/kotlin/com/liv/MainActivity.kt /tmp/liv_sot/MainActivity.kt
             echo "Preserved repo MainActivity"
           fi
-          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart; do
+          for f in lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart; do
             if [ -f "$f" ]; then
               cp "$f" /tmp/liv_sot/$(basename "$f")
               echo "Preserved Phase 4/8F $f"
@@ -117,12 +117,13 @@ jobs:
           cp /tmp/liv_sot/stats_screen.dart lib/screens/stats_screen.dart
           cp /tmp/liv_sot/profile_screen.dart lib/screens/profile_screen.dart
           cp /tmp/liv_sot/app_state.dart lib/services/app_state.dart
+          cp /tmp/liv_sot/storage_service.dart lib/services/storage_service.dart
           cp /tmp/liv_sot/common.dart lib/widgets/common.dart
           cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
           cp /tmp/liv_sot/habits_screen.dart lib/screens/habits_screen.dart
           cp /tmp/liv_sot/dreams_screen.dart lib/screens/dreams_screen.dart
-          echo "RESTORED Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n / habits / dreams"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
+          echo "RESTORED Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / storage_service / common / l10n / habits / dreams"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
 
           if [ -f ci/feedback_patch.py ]; then python3 ci/feedback_patch.py || echo "WARNING: feedback_patch non-fatal"; fi
 
@@ -176,6 +177,7 @@ jobs:
           cp /tmp/liv_sot/stats_screen.dart lib/screens/stats_screen.dart
           cp /tmp/liv_sot/profile_screen.dart lib/screens/profile_screen.dart
           cp /tmp/liv_sot/app_state.dart lib/services/app_state.dart
+          cp /tmp/liv_sot/storage_service.dart lib/services/storage_service.dart
           mkdir -p lib/widgets
           cp /tmp/liv_sot/common.dart lib/widgets/common.dart
           cp /tmp/liv_sot/l10n.dart lib/services/l10n.dart
@@ -190,8 +192,8 @@ jobs:
           sha256sum lib/services/audio_service.dart
           echo "FINAL MAIN ACTIVITY:"
           sha256sum android/app/src/main/kotlin/com/liv/MainActivity.kt
-          echo "FINAL Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / common / l10n / habits / dreams:"
-          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
+          echo "FINAL Phase 4/8F models / onboarding / root_shell / period_screen / stats / profile / app_state / storage_service / common / l10n / habits / dreams:"
+          sha256sum lib/models.dart lib/screens/onboarding_screen.dart lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/stats_screen.dart lib/screens/profile_screen.dart lib/services/app_state.dart lib/services/storage_service.dart lib/widgets/common.dart lib/services/l10n.dart lib/screens/habits_screen.dart lib/screens/dreams_screen.dart
           echo "===================================="
 
           if grep -q "OverflowBox" lib/screens/home_screen.dart; then
