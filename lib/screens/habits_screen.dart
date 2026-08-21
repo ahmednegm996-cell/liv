@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
 import '../services/l10n.dart';
-import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../models.dart';
 
@@ -13,8 +12,6 @@ class HabitsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final t = L10n.of(state.profile.locale);
-    final accent = AppColors.accentFrom(state.profile.accentColor);
-
     return Scaffold(
       appBar: AppBar(
         title: Text(t.habits),
