@@ -118,3 +118,9 @@ class HeartsRow extends StatelessWidget {
     );
   }
 }
+
+/// Architecture-neutral secondary text color for protected HomeScreen call sites.
+Color secondaryText(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? Colors.white60
+        : Colors.black54;
