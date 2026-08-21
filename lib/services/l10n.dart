@@ -43,6 +43,9 @@ class L10n {
   String get job_field => t('job_field');
   String get hearts => t('hearts');
   String get periodTracking => t('periodTracking');
+  // Phase 8H+ minimal compatibility
+  String get next => t('next');
+  String get morningRoutine => t('morningRoutine');
 
   static const Map<String, Map<String, String>> _maps = {
     'ar_eg': {
@@ -67,6 +70,8 @@ class L10n {
       'job_field': 'مجال الشغل',
       'hearts': 'قلوب',
       'periodTracking': 'تتبع الدورة',
+      'next': 'التالي',
+      'morningRoutine': 'روتين الصباح',
     },
     'ar': {
       'app_name': 'ليف',
@@ -90,6 +95,8 @@ class L10n {
       'job_field': 'مجال العمل',
       'hearts': 'قلوب',
       'periodTracking': 'تتبع الدورة',
+      'next': 'التالي',
+      'morningRoutine': 'روتين الصباح',
     },
     'en': {
       'app_name': 'LIV',
@@ -113,6 +120,8 @@ class L10n {
       'job_field': 'Work field',
       'hearts': 'Hearts',
       'periodTracking': 'Period tracking',
+      'next': 'Next',
+      'morningRoutine': 'Morning Routine',
     },
   };
 }
