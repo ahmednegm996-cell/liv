@@ -1,1 +1,305 @@
-SEE_LOCAL_FILE
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build Flutter APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Prepare project files (Path B — ZIP full architecture)
+        run: |
+          set -e
+          mkdir -p /tmp/liv_sot /tmp/liv_audio_preserve
+          if [ -f lib/services/audio_service.dart ]; then
+            cp lib/services/audio_service.dart /tmp/liv_sot/audio_service.dart
+            echo "Preserved AudioService"
+          else
+            echo "ERROR: missing audio_service.dart" && exit 1
+          fi
+          if [ -f android/app/src/main/kotlin/com/liv/MainActivity.kt ]; then
+            cp android/app/src/main/kotlin/com/liv/MainActivity.kt /tmp/liv_sot/MainActivity.kt
+            echo "Preserved MainActivity"
+          fi
+          for f in lib/screens/root_shell.dart lib/screens/period_screen.dart lib/screens/onboarding_screen.dart; do
+            if [ -f "$f" ]; then
+              cp "$f" /tmp/liv_sot/$(basename "$f")
+              echo "Preserved modern $f"
+            else
+              echo "ERROR: missing $f" && exit 1
+            fi
+          done
+          LONG="assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3"
+          if [ -f "$LONG" ]; then
+            cp "$LONG" /tmp/liv_audio_preserve/meditation_ambient.mp3
+          elif [ -f assets/audio/meditation_ambient.mp3 ]; then
+            cp assets/audio/meditation_ambient.mp3 /tmp/liv_audio_preserve/meditation_ambient.mp3
+          fi
+          curl -fsSL -o /tmp/liv_app_full.zip \
+            "https://raw.githubusercontent.com/ahmednegm996-cell/liv/1533a7d6bac24ead82701acb0365dc3e60f0b5da/liv_app_full.zip"
+          rm -rf /tmp/liv_extract && mkdir -p /tmp/liv_extract
+          unzip -qo /tmp/liv_app_full.zip -d /tmp/liv_extract
+          if [ -d /tmp/liv_extract/lib ]; then
+            rm -rf lib && cp -a /tmp/liv_extract/lib .
+          else
+            echo "ERROR: zip missing lib/" && exit 1
+          fi
+          if [ -f ci/expand_ai_overlay.py ]; then python3 ci/expand_ai_overlay.py || true; fi
+          if [ -d ci/overlays/lib ]; then
+            cp -a ci/overlays/lib/. lib/
+            echo "Applied ci/overlays"
+          fi
+          python3 << 'PERIODPY'
+from pathlib import Path
+p = Path("lib/models.dart")
+t = p.read_text(encoding="utf-8")
+if "bool isFemale" not in t:
+    old = "  String gender; // male | female | ''\n  bool hasOnboarded;"
+    new = "  String gender; // male | female | ''\n  bool isFemale;\n  bool trackPeriod;\n  DateTime? lastPeriodStart;\n  int cycleLengthDays;\n  int periodLengthDays;\n  bool hasOnboarded;"
+    if old not in t: raise SystemExit("ERROR: gender/hasOnboarded not found")
+    t = t.replace(old, new, 1)
+    t = t.replace("    this.gender = '',\n    this.hasOnboarded = false,", "    this.gender = '',\n    this.isFemale = false,\n    this.trackPeriod = false,\n    this.lastPeriodStart,\n    this.cycleLengthDays = 28,\n    this.periodLengthDays = 5,\n    this.hasOnboarded = false,", 1)
+    t = t.replace("        'gender': gender,\n        'hasOnboarded': hasOnboarded,", "        'gender': gender,\n        'isFemale': isFemale,\n        'trackPeriod': trackPeriod,\n        'lastPeriodStart': lastPeriodStart?.toIso8601String(),\n        'cycleLengthDays': cycleLengthDays,\n        'periodLengthDays': periodLengthDays,\n        'hasOnboarded': hasOnboarded,", 1)
+    t = t.replace("        gender: j['gender'] ?? '',\n        hasOnboarded: j['hasOnboarded'] ?? false,", "        gender: j['gender'] ?? '',\n        isFemale: j['isFemale'] ?? (j['gender'] == 'female'),\n        trackPeriod: j['trackPeriod'] ?? false,\n        lastPeriodStart: j['lastPeriodStart'] != null ? DateTime.tryParse(j['lastPeriodStart']) : null,\n        cycleLengthDays: j['cycleLengthDays'] ?? 28,\n        periodLengthDays: j['periodLengthDays'] ?? 5,\n        hasOnboarded: j['hasOnboarded'] ?? false,", 1)
+    p.write_text(t, encoding="utf-8")
+    print("Patched ZIP models isFemale/trackPeriod")
+lp = Path("lib/services/l10n.dart")
+lt = lp.read_text(encoding="utf-8")
+if "static L10n of" not in lt:
+    lt = lt.replace("class L10n {\n  final String locale; // ar_eg | ar | en\n  const L10n(this.locale);", "class L10n {\n  final String locale; // ar_eg | ar | en\n  const L10n(this.locale);\n\n  static L10n of(String locale) => L10n(locale);")
+    g = "\n  String get home => t('home');\n  String get habits => t('habits');\n  String get dreams => t('dreams');\n  String get stats => t('stats');\n  String get profile => t('profile');\n  String get ai => t('ai');\n  String get points => t('points');\n  String get level => t('level');\n  String get hearts => t('hearts');\n  String get next => t('next');\n"
+    j = lt.find("  String t(String key)")
+    if j > 0: lt = lt[:j] + g + lt[j:]
+    lp.write_text(lt, encoding="utf-8")
+    print("Patched L10n.of")
+PERIODPY
+          if [ ! -f lib/screens/home_screen.dart ]; then echo "ERROR: home missing" && exit 1; fi
+          cp lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart
+          mkdir -p lib/services lib/screens
+          cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
+          cp /tmp/liv_sot/root_shell.dart lib/screens/root_shell.dart
+          cp /tmp/liv_sot/period_screen.dart lib/screens/period_screen.dart
+          cp /tmp/liv_sot/onboarding_screen.dart lib/screens/onboarding_screen.dart
+          echo "RESTORED modern root/period/onboarding (ZIP full architecture kept)"
+          if [ -f ci/feedback_patch.py ]; then python3 ci/feedback_patch.py || true; fi
+          if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
+          if [ -f /tmp/liv_sot/MainActivity.kt ]; then
+            mkdir -p android/app/src/main/kotlin/com/liv
+            cp /tmp/liv_sot/MainActivity.kt android/app/src/main/kotlin/com/liv/MainActivity.kt
+            if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
+          fi
+          if [ -d /tmp/liv_extract/assets ]; then mkdir -p assets && cp -a /tmp/liv_extract/assets/. assets/; fi
+          mkdir -p assets/audio
+          if [ -f /tmp/liv_audio_preserve/meditation_ambient.mp3 ]; then cp /tmp/liv_audio_preserve/meditation_ambient.mp3 assets/audio/meditation_ambient.mp3; fi
+          if [ ! -s assets/audio/meditation_ambient.mp3 ]; then
+            curl -fsSL -o assets/audio/meditation_ambient.mp3 "https://raw.githubusercontent.com/ahmednegm996-cell/liv/main/assets/audio/Meditation%20Music%20for%20a%20Calm%20Background%20%20Quiet%20Echoes%20%20Brioso.mp3" || true
+          fi
+          if [ ! -s assets/audio/meditation_ambient.mp3 ]; then echo "ERROR: meditation missing" && exit 1; fi
+          if [ ! -f pubspec.yaml ] && [ -f /tmp/liv_extract/pubspec.yaml ]; then cp /tmp/liv_extract/pubspec.yaml pubspec.yaml; fi
+          if [ -f ci/soundtrack_patch.py ]; then python3 ci/soundtrack_patch.py; fi
+          if ! cmp -s lib/screens/home_screen.dart /tmp/liv_sot/home_from_zip.dart; then cp /tmp/liv_sot/home_from_zip.dart lib/screens/home_screen.dart; fi
+          cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
+          if [ -f ci/home_circle_patch.py ]; then python3 ci/home_circle_patch.py; fi
+          cp /tmp/liv_sot/root_shell.dart lib/screens/root_shell.dart
+          cp /tmp/liv_sot/period_screen.dart lib/screens/period_screen.dart
+          cp /tmp/liv_sot/onboarding_screen.dart lib/screens/onboarding_screen.dart
+          cp /tmp/liv_sot/audio_service.dart lib/services/audio_service.dart
+          echo "FINAL Path B hashes:"
+          sha256sum lib/models.dart lib/services/app_state.dart lib/screens/root_shell.dart lib/services/audio_service.dart
+          if grep -q "OverflowBox" lib/screens/home_screen.dart; then echo "ERROR: OverflowBox" && exit 1; fi
+          python3 << 'PY'
+from pathlib import Path
+import re
+h = Path("lib/screens/home_screen.dart").read_text(encoding="utf-8")
+m = re.search(r"SizedBox\(\s*width:\s*(\d+)\s*,\s*height:\s*(\d+)\s*,\s*child:\s*Stack\([\s\S]{0,250}?CircularProgressIndicator\(\s*value:\s*progress\s*,\s*strokeWidth:\s*([\d.]+)", h)
+if not m: raise SystemExit("ERROR: circle not found")
+if m.group(1) != "90" or m.group(2) != "90": raise SystemExit(f"ERROR: circle {m.group(1)}x{m.group(2)}")
+print(f"VALIDATE circle {m.group(1)}x{m.group(2)} stroke={m.group(3)}")
+PY
+          if ! grep -q "bool isFemale" lib/models.dart; then echo "ERROR: models missing isFemale" && exit 1; fi
+          if ! grep -q "bool trackPeriod" lib/models.dart; then echo "ERROR: models missing trackPeriod" && exit 1; fi
+          if ! grep -q "class WeeklyTask" lib/models.dart; then echo "ERROR: models missing WeeklyTask" && exit 1; fi
+          if ! grep -q "class DreamStep" lib/models.dart; then echo "ERROR: models missing DreamStep" && exit 1; fi
+          if ! grep -q "isGood" lib/models.dart; then echo "ERROR: models missing isGood" && exit 1; fi
+          if ! grep -q "updateProfile" lib/services/app_state.dart; then echo "ERROR: AppState missing updateProfile" && exit 1; fi
+          if ! grep -q "addWeeklyTask" lib/services/app_state.dart; then echo "ERROR: AppState missing addWeeklyTask" && exit 1; fi
+          if ! grep -q "markHabitToday" lib/services/app_state.dart; then echo "ERROR: AppState missing markHabitToday" && exit 1; fi
+          if ! grep -q "GeminiService get ai" lib/services/app_state.dart; then echo "ERROR: AppState missing ai" && exit 1; fi
+          if ! grep -q "aiContext" lib/services/app_state.dart; then echo "ERROR: AppState missing aiContext" && exit 1; fi
+          if ! grep -q "monsterOfMonth\|chooseMonsterOfMonth" lib/services/app_state.dart; then echo "ERROR: AppState missing monster" && exit 1; fi
+          if ! grep -q "addDreamWithAISteps" lib/services/app_state.dart; then echo "ERROR: AppState missing addDreamWithAISteps" && exit 1; fi
+          if grep -q "List<TaskItem> tasks" lib/services/app_state.dart; then echo "ERROR: Phase-4 TaskItem AppState" && exit 1; fi
+          if ! grep -q "isFemale && state.profile.trackPeriod\|isFemale && .*trackPeriod" lib/screens/root_shell.dart; then echo "ERROR: root_shell missing Period tab" && exit 1; fi
+          if ! grep -q "_isFemale\|trackPeriod" lib/screens/onboarding_screen.dart; then echo "ERROR: onboarding missing period fields" && exit 1; fi
+          if grep -q "Future<void> _tick\|HapticFeedback\|FixedExtentScrollController" lib/screens/onboarding_screen.dart; then echo "ERROR: complex onboarding" && exit 1; fi
+          if grep -q "state.profile.gender == 'female'" lib/screens/root_shell.dart; then echo "ERROR: obsolete gender string" && exit 1; fi
+          if ! grep -q "meditationVolume = 1.0" lib/services/audio_service.dart; then echo "ERROR: meditationVolume" && exit 1; fi
+          if ! grep -q "MethodChannel('liv.feedback')" lib/services/audio_service.dart; then echo "ERROR: liv.feedback" && exit 1; fi
+          test -s assets/audio/meditation_ambient.mp3
+          python3 << 'PY'
+from pathlib import Path
+import re
+p = Path("pubspec.yaml")
+t = p.read_text(encoding="utf-8")
+if "speech_to_text" not in t and "audioplayers:" in t:
+    t = re.sub(r"(audioplayers:\s*[^\n]+\n)", r"\1  speech_to_text: 6.6.2\n  permission_handler: 11.3.1\n", t, count=1)
+asset_entries = []
+if Path("assets/audio/meditation_ambient.mp3").exists(): asset_entries.append("assets/audio/meditation_ambient.mp3")
+if Path("assets/icon/liv_icon.png").exists(): asset_entries.append("assets/icon/liv_icon.png")
+if asset_entries:
+    assets_block = "  assets:\n" + "".join(f"    - {a}\n" for a in asset_entries)
+    if re.search(r"(?m)^  assets:\n(?:    - .+\n)*", t):
+        t = re.sub(r"(?m)^  assets:\n(?:    - .+\n)*", assets_block, t, count=1)
+t = re.sub(r"^version:.*$", "version: 1.4.9+18", t, count=1, flags=re.M)
+p.write_text(t, encoding="utf-8")
+print("pubspec OK")
+PY
+          test -f lib/main.dart
+          echo "VERIFY Path B OK — ZIP FULL architecture + modern onboarding/period/root + circle 90 + audio"
+
+      - name: Ensure Android project
+        run: |
+          set -e
+          cp -a lib /tmp/liv_lib_backup
+          cp pubspec.yaml /tmp/liv_pubspec_backup
+          mkdir -p /tmp/liv_assets_backup && cp -a assets /tmp/liv_assets_backup/ 2>/dev/null || true
+          if [ ! -f android/app/build.gradle ] && [ ! -f android/app/build.gradle.kts ]; then
+            flutter create --platforms=android --org com.liv --project-name liv_app . || true
+          fi
+          rm -rf lib && cp -a /tmp/liv_lib_backup lib
+          cp /tmp/liv_pubspec_backup pubspec.yaml
+          if [ -d /tmp/liv_assets_backup/assets ]; then rm -rf assets && cp -a /tmp/liv_assets_backup/assets assets; fi
+          if [ -f ci/sound_fix.py ]; then python3 ci/sound_fix.py; fi
+
+      - name: Patch Gaps + minify off
+        run: |
+          python3 << 'PY'
+from pathlib import Path
+import re, textwrap
+theme = Path("lib/theme/app_theme.dart")
+if theme.exists():
+    tt = theme.read_text(encoding="utf-8")
+    if "class Gaps" in tt:
+        tt = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n", tt)
+        theme.write_text(tt.rstrip() + "\n", encoding="utf-8")
+common = Path("lib/widgets/common.dart")
+GAPS = """
+class Gaps {
+  static const h4 = SizedBox(height: 4);
+  static const h6 = SizedBox(height: 6);
+  static const h8 = SizedBox(height: 8);
+  static const h10 = SizedBox(height: 10);
+  static const h12 = SizedBox(height: 12);
+  static const h14 = SizedBox(height: 14);
+  static const h16 = SizedBox(height: 16);
+  static const h18 = SizedBox(height: 18);
+  static const h20 = SizedBox(height: 20);
+  static const h24 = SizedBox(height: 24);
+  static const h28 = SizedBox(height: 28);
+  static const h32 = SizedBox(height: 32);
+  static const w8 = SizedBox(width: 8);
+  static const w12 = SizedBox(width: 12);
+  static const w16 = SizedBox(width: 16);
+}
+"""
+if common.exists():
+    t = common.read_text(encoding="utf-8")
+    if "class Gaps" in t:
+        t = re.sub(r"\n*class Gaps\s*\{[\s\S]*?\n\}\s*", "\n" + textwrap.dedent(GAPS).strip() + "\n", t)
+    else:
+        t = t.rstrip() + "\n" + textwrap.dedent(GAPS).strip() + "\n"
+    common.write_text(t.rstrip() + "\n", encoding="utf-8")
+for f in [Path("android/app/build.gradle"), Path("android/app/build.gradle.kts")]:
+    if f.exists():
+        t = f.read_text(encoding="utf-8")
+        t = re.sub(r"minifyEnabled\s+[^\n]+", "minifyEnabled false", t)
+        t = re.sub(r"shrinkResources\s+[^\n]+", "shrinkResources false", t)
+        f.write_text(t, encoding="utf-8")
+print("Gaps + minify OK")
+PY
+
+      - name: Force compileSdk 35 + permissions
+        run: |
+          set -e
+          for f in android/app/build.gradle android/app/build.gradle.kts; do
+            [ -f "$f" ] && sed -i -E 's/compileSdk\s*=\s*[0-9]+/compileSdk = 35/' "$f" || true
+            [ -f "$f" ] && sed -i -E 's/targetSdk\s*=\s*[0-9]+/targetSdk = 35/' "$f" || true
+          done
+          python3 << 'PY'
+from pathlib import Path
+import re
+p = Path("android/app/src/main/AndroidManifest.xml")
+if p.exists():
+    text = p.read_text(encoding="utf-8")
+    for perm in ["android.permission.INTERNET","android.permission.VIBRATE","android.permission.RECORD_AUDIO"]:
+        if perm not in text:
+            text = re.sub(r"(<manifest[^>]*>)", r'\1\n    <uses-permission android:name="'+perm+'"/>', text, count=1)
+    text = re.sub(r'android:label="[^"]*"', 'android:label="LIV"', text, count=1)
+    if "allowBackup" not in text:
+        text = text.replace("<application", '<application android:allowBackup="false" android:fullBackupContent="false"', 1)
+    p.write_text(text, encoding="utf-8")
+PY
+
+      - name: Bump Kotlin AGP Gradle
+        run: |
+          if [ -f android/settings.gradle ]; then
+            sed -i -E 's/(id "org.jetbrains.kotlin.android" version ")[^"]+(")/\11.9.22\2/' android/settings.gradle || true
+            sed -i -E 's/(id "com.android.application" version ")[^"]+(")/\18.5.0\2/' android/settings.gradle || true
+          fi
+          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+            sed -i -E 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip#' android/gradle/wrapper/gradle-wrapper.properties || true
+          fi
+
+      - name: Setup fixed release signing
+        run: |
+          set -e
+          mkdir -p android/app
+          if [ -f ci/ks.b64 ]; then
+            base64 -d ci/ks.b64 > android/app/liv-release.keystore || true
+            if keytool -list -keystore android/app/liv-release.keystore -storepass liv2026secure -alias liv >/dev/null 2>&1; then
+              printf '%s\n' 'storePassword=liv2026secure' 'keyPassword=liv2026secure' 'keyAlias=liv' 'storeFile=liv-release.keystore' > android/key.properties
+            fi
+          fi
+          if [ -f ci/fix_signing.py ]; then python3 ci/fix_signing.py; fi
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Generate app icon
+        run: dart run flutter_launcher_icons || true
+
+      - name: Build APK (Release)
+        run: |
+          set -e
+          flutter build apk --release --no-tree-shake-icons 2>&1 | tee /tmp/flutter_build.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            tail -100 /tmp/flutter_build.log || true
+            exit 1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: liv-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
