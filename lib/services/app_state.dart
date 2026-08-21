@@ -183,8 +183,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> runWeeklyMeeting() async {
-    // thin no-op adapter — keeps call sites compiling without new architecture
+  Future<String> runWeeklyMeeting() async {
+    // thin architecture-neutral adapter — returns status string expected by home_screen
     notifyListeners();
+    final open = tasks.where((t) => !t.done).length;
+    final done = tasks.where((t) => t.done).length;
+    if (tasks.isEmpty) return 'No tasks this week';
+    return 'Week review: $done done, $open open';
   }
 }
