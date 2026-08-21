@@ -306,7 +306,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
             child: Column(
               children: [
                 _header(state, accent, danger),
-                // Fixed suggestions — not inside the scrolling ListView
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
                   child: _quickPrompts(accent, isDark),
@@ -368,7 +367,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     state.ai.isConfigured
                         ? 'متصل • ${state.profile.aiProvider}'
                         : 'حط API Key من البروفايل',
-                    style: TextStyle(fontSize: 12, color: app_theme.secondaryText(context)),
+                    style: TextStyle(fontSize: 12, color: app_theme.AppColors.secondaryText(context)),
                   ),
                 ],
               ),
@@ -394,7 +393,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
         ),
       );
 
-  /// Compact suggestion chips — same visual language as onboarding choices.
   Widget _quickPrompts(Color accent, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -423,19 +421,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
     }
     String labelFor(String type) {
       switch (type) {
-        case 'TASK':
-          return 'إضافة للمهمات';
-        case 'GOOD':
-          return 'إضافة للعادات';
-        case 'BAD':
-          return 'إضافة للعادات السيئة';
-        case 'DREAM':
-          return 'إضافة للأحلام';
-        default:
-          return 'إضافة';
+        case 'TASK': return 'إضافة للمهمات';
+        case 'GOOD': return 'إضافة للعادات';
+        case 'BAD': return 'إضافة للعادات السيئة';
+        case 'DREAM': return 'إضافة للأحلام';
+        default: return 'إضافة';
       }
     }
-
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 4),
       child: Column(
@@ -452,9 +444,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   backgroundColor: accent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
             ),
@@ -471,42 +461,19 @@ class _AiChatScreenState extends State<AiChatScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
-        ),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: BoxDecoration(
-          color: isUser
-              ? accent
-              : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
+          color: isUser ? accent : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
             bottomLeft: Radius.circular(isUser ? 6 : 20),
             bottomRight: Radius.circular(isUser ? 20 : 6),
           ),
-          border: isUser
-              ? null
-              : Border.all(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : Colors.black.withOpacity(0.05),
-                ),
-          boxShadow: [
-            BoxShadow(
-              color: (isUser ? accent : Colors.black).withOpacity(isUser ? 0.22 : 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          border: isUser ? null : Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05)),
+          boxShadow: [BoxShadow(color: (isUser ? accent : Colors.black).withOpacity(isUser ? 0.22 : 0.05), blurRadius: 12, offset: const Offset(0, 4))],
         ),
-        child: Text(
-          m['text'] ?? '',
-          style: TextStyle(
-            color: isUser ? Colors.white : null,
-            height: 1.5,
-            fontSize: 14.5,
-          ),
-        ),
+        child: Text(m['text'] ?? '', style: TextStyle(color: isUser ? Colors.white : null, height: 1.5, fontSize: 14.5)),
       ),
     );
   }
@@ -522,9 +489,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                 maxLines: 4,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _send(),
-                decoration: const InputDecoration(
-                  hintText: 'اكتب لـ Liv...',
-                ),
+                decoration: const InputDecoration(hintText: 'اكتب لـ Liv...'),
               ),
             ),
             const SizedBox(width: 8),
@@ -535,17 +500,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [accent, accent.withOpacity(0.8)],
-                  ),
+                  gradient: LinearGradient(colors: [accent, accent.withOpacity(0.8)]),
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withOpacity(0.35),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  boxShadow: [BoxShadow(color: accent.withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 4))],
                 ),
                 child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
               ),
@@ -565,11 +522,7 @@ class _Typing extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.06)
-              : Colors.black.withOpacity(0.05),
-        ),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -577,13 +530,10 @@ class _Typing extends StatelessWidget {
           SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(width: 10),
-          Text('Liv بيفكر...', style: TextStyle(color: app_theme.secondaryText(context), fontSize: 13)),
+          Text('Liv بيفكر...', style: TextStyle(color: app_theme.AppColors.secondaryText(context), fontSize: 13)),
         ],
       ),
     );
