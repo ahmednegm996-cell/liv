@@ -9,6 +9,7 @@ class AppColors {
   static const orange = Color(0xFFF97316);
   static const green = Color(0xFF22C55E);
   static const danger = Color(0xFFEF4444);
+  static const dangerDark = Color(0xFF9F1239);
   static const indigo = Color(0xFF6366F1);
 
   static Color accentFrom(String name) {
@@ -47,4 +48,9 @@ class AppTheme {
       appBarTheme: AppBarTheme(centerTitle: true, backgroundColor: a.withOpacity(0.12)),
     );
   }
+}
+
+Color secondaryText(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return isDark ? Colors.white70 : Colors.black54;
 }
