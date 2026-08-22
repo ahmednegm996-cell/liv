@@ -3,7 +3,7 @@
 
 Apply AFTER ZIP extract + overlays + ZIP re-lock.
 Edits ONLY the daily progress ring (value: progress): outer SizedBox size + stroke.
-Percent font set to 16 (as in Build 246) — exact match to known-good build.
+The inner percent/level text is intentionally NOT modified.
 No OverflowBox. No other UI / audio / AI changes.
 """
 from pathlib import Path
@@ -11,9 +11,8 @@ import re
 import sys
 
 HOME = Path("lib/screens/home_screen.dart")
-TARGET_SIZE = 90
+TARGET_SIZE = 150
 TARGET_STROKE = "7"
-TARGET_FONT = "16"
 
 
 def main() -> None:
@@ -61,20 +60,14 @@ def main() -> None:
     mw = re.search(r"width:\s*(\d+)", block)
     mh = re.search(r"height:\s*(\d+)", block)
     ms = re.search(r"strokeWidth:\s*([\d.]+)", block)
-    mf = re.search(r"fontSize:\s*(\d+)", block)
-    if not all([mw, mh, ms, mf]):
-        raise SystemExit("ERROR: could not parse width/height/stroke/font in block")
+    if not all([mw, mh, ms]):
+        raise SystemExit("ERROR: could not parse width/height/stroke in block")
 
-    w, h, stroke, font = mw.group(1), mh.group(1), ms.group(1), mf.group(1)
-    if (
-        w == str(TARGET_SIZE)
-        and h == str(TARGET_SIZE)
-        and stroke == TARGET_STROKE
-        and font == TARGET_FONT
-    ):
+    w, h, stroke = mw.group(1), mh.group(1), ms.group(1)
+    if w == str(TARGET_SIZE) and h == str(TARGET_SIZE) and stroke == TARGET_STROKE:
         print(
             f"home_circle_patch: already {TARGET_SIZE}x{TARGET_SIZE} "
-            f"stroke={TARGET_STROKE} font={TARGET_FONT}"
+            f"stroke={TARGET_STROKE} (text untouched)"
         )
         return
 
@@ -84,13 +77,12 @@ def main() -> None:
     new_block = re.sub(
         r"strokeWidth:\s*[\d.]+", f"strokeWidth: {TARGET_STROKE}", new_block, count=1
     )
-    new_block = re.sub(r"fontSize:\s*\d+", f"fontSize: {TARGET_FONT}", new_block, count=1)
 
     text = text[:start] + new_block + text[end:]
     HOME.write_text(text, encoding="utf-8")
     print(
-        f"home_circle_patch: {w}x{h} stroke={stroke} font={font} "
-        f"→ {TARGET_SIZE}x{TARGET_SIZE} stroke={TARGET_STROKE} font={TARGET_FONT}"
+        f"home_circle_patch: {w}x{h} stroke={stroke} "
+        f"→ {TARGET_SIZE}x{TARGET_SIZE} stroke={TARGET_STROKE} (text untouched)"
     )
 
     t = HOME.read_text(encoding="utf-8")
@@ -108,7 +100,7 @@ def main() -> None:
         raise SystemExit("ERROR: OverflowBox introduced")
     if "${(progress * 100).round()}%" not in t:
         raise SystemExit("ERROR: percent label corrupted")
-    print("home_circle_patch done OK")
+    print("home_circle_patch done OK — circle resized, text untouched")
 
 
 if __name__ == "__main__":
