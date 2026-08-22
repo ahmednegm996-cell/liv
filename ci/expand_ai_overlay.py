@@ -95,4 +95,18 @@ def expand(stem: str, rel: str, required_markers):
 
 expand("gemini_overlay", "services/gemini_service.dart", ["personalityInsight", "generateText"])
 expand("ai_chat_overlay", "screens/ai_chat_screen.dart", ["addHabit", "_pendingAction"])
+
+# UI source-of-truth lock: restore the exact UI from the historical LIV commit
+# requested by the user, after ZIP/overlay expansion has finished.
+TARGET = "00f0cf68bdf6db29860467d5cd4d991236bbf228"
+import subprocess
+for rel in ("lib/screens/home_screen.dart", "lib/screens/onboarding_screen.dart", "lib/screens/root_shell.dart"):
+    try:
+        data = subprocess.check_output(["git", "show", f"{TARGET}:{rel}"])
+        Path(rel).parent.mkdir(parents=True, exist_ok=True)
+        Path(rel).write_bytes(data)
+        print(f"[ui_lock] restored {rel} from {TARGET}")
+    except Exception as e:
+        print(f"[ui_lock] could not restore {rel}: {e}")
+
 print("expand_ai_overlay done")

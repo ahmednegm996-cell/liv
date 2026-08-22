@@ -1,0 +1,80 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source of truth
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+
+      - name: Verify LIV source
+        run: |
+          set -e
+          test -f lib/main.dart
+          test -f lib/models.dart
+          test -f lib/services/app_state.dart
+          test -f lib/screens/onboarding_screen.dart
+          test -f lib/screens/home_screen.dart
+          test -f assets/icon/liv_icon.png
+          grep -q '_buildLanguagePage' lib/screens/onboarding_screen.dart
+          grep -q '_buildGenderPage' lib/screens/onboarding_screen.dart
+          grep -q '_buildAgePage' lib/screens/onboarding_screen.dart
+          grep -q '_buildBodyPage' lib/screens/onboarding_screen.dart
+          grep -q '_buildSleepPage' lib/screens/onboarding_screen.dart
+          grep -q '_buildJobPage' lib/screens/onboarding_screen.dart
+          grep -q '_buildInterestsPage' lib/screens/onboarding_screen.dart
+          grep -q '_buildAnalysisPage' lib/screens/onboarding_screen.dart
+          grep -q 'class WeeklyTask' lib/models.dart
+          grep -q 'class DreamStep' lib/models.dart
+          grep -q 'bool isFemale' lib/models.dart
+          grep -q 'bool trackPeriod' lib/models.dart
+          echo 'SOURCE OF TRUTH OK'
+
+      - name: Verify target circle
+        run: |
+          grep -q 'width: 90' lib/screens/home_screen.dart
+          grep -q 'height: 90' lib/screens/home_screen.dart
+          grep -q 'strokeWidth: 7' lib/screens/home_screen.dart
+          echo 'CIRCLE 90x90 STROKE 7 OK'
+
+      - name: Ensure meditation asset
+        run: |
+          set -e
+          test -s 'assets/audio/meditation_ambient.mp3' || test -s 'assets/audio/Meditation Music for a Calm Background  Quiet Echoes  Brioso.mp3'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Generate launcher icon
+        run: dart run flutter_launcher_icons
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build release APK
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: liv-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
