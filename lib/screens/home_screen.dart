@@ -41,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen>
         ? _calculateAge(state.profile.birthDate!)
         : 25.0;
 
-    // Schedule once after first frame — never from build().
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _startAgeAnimation(realAge);
     });
@@ -78,7 +77,6 @@ class _HomeScreenState extends State<HomeScreen>
         _displayedAge = currentAge;
       });
 
-      // Tick once per completed year only (native sound + vibration via AudioService).
       if (currentWholeYear > _lastAgeTick &&
           currentWholeYear > 0 &&
           currentWholeYear <= safeAge.floor()) {
@@ -105,20 +103,21 @@ class _HomeScreenState extends State<HomeScreen>
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Progress circle — size controlled here only (no CI forced resize).
+          // Only the ring itself is resized. The surrounding theme/layout and
+          // the text inside remain unchanged.
           Center(
             child: SizedBox(
-              width: 220,
-              height: 220,
+              width: 150,
+              height: 150,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
-                    width: 220,
-                    height: 220,
+                    width: 150,
+                    height: 150,
                     child: CircularProgressIndicator(
                       value: (state.profile.points % 100) / 100,
-                      strokeWidth: 14,
+                      strokeWidth: 8,
                       backgroundColor: accent.withOpacity(0.15),
                       color: accent,
                     ),
@@ -201,7 +200,6 @@ class _HomeScreenState extends State<HomeScreen>
                             points: 10,
                           ),
                         );
-                        // UI button → buttonClick (not age tick).
                         AudioService.instance.buttonClick();
                       },
                     ),
@@ -214,7 +212,6 @@ class _HomeScreenState extends State<HomeScreen>
                       value: task.done,
                       onChanged: (_) {
                         state.toggleTask(task.id);
-                        // Single feedback path: native sound + vibration via AudioService.
                         AudioService.instance.buttonClick();
                       },
                     ),
