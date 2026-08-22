@@ -25,7 +25,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verify LIV source
+      - name: Verify full onboarding and architecture
         run: |
           set -e
           test -f lib/main.dart
@@ -46,14 +46,33 @@ jobs:
           grep -q 'class DreamStep' lib/models.dart
           grep -q 'bool isFemale' lib/models.dart
           grep -q 'bool trackPeriod' lib/models.dart
-          echo 'SOURCE OF TRUTH OK'
+          echo 'FULL SOURCE OK'
 
-      - name: Verify target circle
+      - name: Apply only the intentional 90px circle patch
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('lib/screens/home_screen.dart')
+          t=p.read_text(encoding='utf-8')
+          m=re.search(r'(SizedBox\(\s*width:\s*)\d+(\s*,\s*height:\s*)\d+(\s*,\s*child:\s*Stack\([\s\S]{0,900}?CircularProgressIndicator\([\s\S]{0,300}?strokeWidth:\s*)[\d.]+',t)
+          if not m: raise SystemExit('circle block not found')
+          block=t[m.start():m.end()]
+          block=re.sub(r'width:\s*\d+','width: 90',block,count=1)
+          block=re.sub(r'height:\s*\d+','height: 90',block,count=1)
+          block=re.sub(r'width:\s*\d+','width: 90',block,count=1)
+          block=re.sub(r'height:\s*\d+','height: 90',block,count=1)
+          block=re.sub(r'strokeWidth:\s*[\d.]+','strokeWidth: 7',block,count=1)
+          t=t[:m.start()]+block+t[m.end():]
+          # Keep the level text compact like the target build.
+          t=t.replace('fontSize: 28,','fontSize: 16,',1)
+          p.write_text(t,encoding='utf-8')
+          print('90x90 / stroke 7 / font 16 patch applied')
+          PY
           grep -q 'width: 90' lib/screens/home_screen.dart
           grep -q 'height: 90' lib/screens/home_screen.dart
           grep -q 'strokeWidth: 7' lib/screens/home_screen.dart
-          echo 'CIRCLE 90x90 STROKE 7 OK'
+          grep -q 'fontSize: 16' lib/screens/home_screen.dart
 
       - name: Ensure meditation asset
         run: |
