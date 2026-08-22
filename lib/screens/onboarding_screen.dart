@@ -44,7 +44,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     state.profile.isFemale = _isFemale ?? false;
     state.profile.trackPeriod = (_isFemale == true) && _trackPeriod;
 
-    state.completeOnboarding();
+    state.completeOnboarding(name);
   }
 
   void _previousPage() {
